@@ -48,7 +48,7 @@ Features e transcrições bem-sucedidas são reutilizadas em `temporarios/`, ide
 
 ## FilmCraft
 
-Baseado na [documentação oficial de agentes](https://github.com/storytold/filmcraft/blob/main/docs/agents.md), [protocolo de controle](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) e importador OTIO. Validado com **CLI 0.18.0 para Linux**. Nenhuma API de IA paga é usada.
+Baseado na [documentação oficial de agentes](https://github.com/storytold/filmcraft/blob/main/docs/agents.md), [protocolo de controle](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) e importador OTIO. Validado com **CLI 0.18.0 para Linux e Windows x64**, incluindo abertura de projeto no FilmCraft desktop Windows pelo teste do executável empacotado. Nenhuma API de IA paga é usada.
 
 1. Instale o FilmCraft desktop oficial no Windows. A CLI acompanha o MSI, normalmente em `%LOCALAPPDATA%\Programs\ArtCraft\FilmCraft\filmcraft-cli.exe` ou `C:\Program Files\ArtCraft\FilmCraft\filmcraft-cli.exe`.
 2. Clique em **Conectar ao FilmCraft**. O Radar procura esses locais e o PATH, ou permite selecionar o executável do editor, a CLI ou usar a opção “Escolher instalação FilmCraft…”. Consulta o registro do instalador e lembra a instalação selecionada. Também aceita `FILMCRAFT_CLI`. Confere `--help` e os esquemas reais de `file.import` e `sequence.settings` antes de editar.
@@ -62,7 +62,7 @@ Cada faixa de áudio OBS é convertida em um WAV estéreo separado, com atraso o
 
 O MCP oficial (`filmcraft-cli mcp`) e o canal JSON (`filmcraft --control 9876`) foram investigados. A criação usa a CLI headless para manter a sessão atual do usuário intacta. Nenhum projeto existente é alterado; os comandos sempre partem de uma sessão nova. O módulo possui uma função de inspeção local, limitada a leitura, para o canal JSON: aceita apenas `127.0.0.1` e lê `FILMCRAFT_CONTROL_TOKEN` do ambiente, sem gravá-lo em logs ou argumentos. Caso use esse canal manualmente, gere 64 caracteres hexadecimais aleatórios para cada sessão e herde a mesma variável nos processos. O Radar não precisa desse token para o fluxo normal via CLI.
 
-Limites: VFR é representado pela taxa nominal do editor, portanto revise arredondamentos no FilmCraft. Preservação de HDR, colorimetria avançada, rotação de metadados, pixel aspect ratio não quadrado e áudio multicanal não foram validados; a versão inicial se destina a gameplay SDR com pixels quadrados. O FilmCraft desktop no Windows e seu canal JSON/MCP ao vivo não foram testados; a automação validada do editor usa a CLI Linux. A abertura nativa e exportação pela CLI Linux foram testadas.
+Limites: VFR é representado pela taxa nominal do editor, portanto revise arredondamentos no FilmCraft. Preservação de HDR, colorimetria avançada, rotação de metadados, pixel aspect ratio não quadrado e áudio multicanal não foram validados; a versão inicial se destina a gameplay SDR com pixels quadrados. O teste Windows abre um projeto num processo isolado do FilmCraft desktop e confirma a leitura pelo canal oficial de controle. Isso verifica a abertura, não todas as funções de edição manual. O servidor MCP não foi exercitado. A abertura nativa e exportação pela CLI Linux foram testadas.
 
 ## Desenvolvimento e testes
 
@@ -99,7 +99,7 @@ Segunda etapa: análise semântica multimodal local e mensurada, avaliação em 
 
 O botão **Copiar para ChatGPT** copia uma solicitação com os cortes selecionados, horários, transcrição e critérios locais. Cole o conteúdo numa conversa no ChatGPT e peça revisão de contexto e pesquisa de tendências, com fontes e datas. O arquivo de vídeo e seu caminho privado não são incluídos nesse texto. A revisão é manual e ocorre naquela conversa; o aplicativo não envia dados automaticamente.
 
-**ChatGPT Plus e API têm cobranças separadas.** O Plus não fornece créditos para chamadas de API de um aplicativo externo. Uma integração automática poderia usar uma chave própria, com orçamento e cobrança separados, e envio explícito dos trechos escolhidos. A versão atual oferece o fluxo manual sem chave. Pesquisa de tendências ajuda a embasar uma avaliação editorial, sem garantir viralização nem produzir probabilidades de engajamento não medidas.
+**[ChatGPT Plus](https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus) e API têm cobranças separadas.** O Plus não fornece créditos para chamadas de API de um aplicativo externo. Uma integração automática poderia usar uma chave própria, com orçamento e cobrança separados, e envio explícito dos trechos escolhidos. A versão atual oferece o fluxo manual sem chave. Pesquisa de tendências ajuda a embasar uma avaliação editorial, sem garantir viralização nem produzir probabilidades de engajamento não medidas.
 
 ### Atualização 0.1.2
 

@@ -48,3 +48,16 @@ A automação nativa [Instalador Windows](https://github.com/PedroHenrique1788/R
 - O modelo tiny é incluído na revisão `d90ca5fe260221311c53c58e660288d3deb8d356`; não depende do primeiro download no computador do usuário. Os resultados desta automação substituem a pendência inicial de reconhecimento básico no pacote Windows; o download direto de pesos nesta máquina cloud continuou bloqueado no CDN.
 - O pacote inclui os runtimes Python/Visual C++, FFmpeg com verificação SHA-256 e licenças dos componentes. Não há assinatura digital de editor nesta versão.
 - A execução [42419007223](https://github.com/PedroHenrique1788/Radar/actions/runs/42419007223) também passou na geração Inno Setup, instalação silenciosa por usuário, repetição do teste funcional no aplicativo instalado e desinstalação. O artefato gerado tem aproximadamente 279 MB. A publicação de uma versão usa novamente esses mesmos gates antes de liberar o download.
+
+
+## Correções e usabilidade — 0.1.2
+
+Os relatos do usuário esclareceram que os projetos eram criados, mas o fluxo e os retornos da interface não eram claros. A atualização acrescenta confirmação de conexão, progresso de operações, mensagem com o caminho salvo, erro copiável, seleção inicial e controles adaptáveis à tela.
+
+A revisão também corrigiu pontos frágeis: finalização de MP4 em sistemas de arquivos sem hard links, substituição de MP4 apenas após confirmação, repetição de projetos sem colisões, busca da instalação pelo registro/seleção do executável desktop, preferência persistente e restauração da busca normal de DLLs para processos externos do executável PyInstaller. Busca antecipada de vídeo com origem zero foi verificada sem perder os limites; origens não zero usam o caminho conservador.
+
+**35 testes passaram em Linux**, incluindo ações reais dos botões de MP4/conexão/projetos, pastas com caracteres não ASCII, simulação de ausência de hard links, preservação do original e projetos conjuntos/individuais/repetidos.
+
+O workflow Windows passou nos testes de código e no teste do executável empacotado, usando **FilmCraft 0.18.0 Windows x64 oficial**, com SHA-256 verificado. Os testes criam projetos agrupados e individuais na mesma pasta, reabrem os nativos, renderizam um MP4 e iniciam o desktop numa sessão isolada; o canal oficial confirma que o projeto correto e suas três sequências foram abertos. Nenhum projeto existente do usuário é alterado. A publicação da release continua condicionada também à instalação e ao teste funcional do aplicativo instalado.
+
+O botão “Copiar para ChatGPT” foi testado preservando tempos e omitindo o caminho privado do vídeo. Ele prepara uma revisão manual; nenhuma API paga foi integrada e nenhuma pesquisa de tendências é executada automaticamente pelo aplicativo. A classificação local continua heurística.
