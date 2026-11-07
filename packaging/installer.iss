@@ -1,10 +1,14 @@
 #ifndef AppVersion
   #define AppVersion "0.1.0"
 #endif
+#ifndef FileVersion
+  #define FileVersion "0.1.0.0"
+#endif
 [Setup]
 AppId={{8479A86A-8E35-49BC-BCC5-45A823BC37F2}
 AppName=Radar de Cortes - CefasGamer
 AppVersion={#AppVersion}
+VersionInfoVersion={#FileVersion}
 AppPublisher=PedroHenrique1788
 AppPublisherURL=https://github.com/PedroHenrique1788/Radar
 DefaultDirName={localappdata}\Programs\RadarCortes

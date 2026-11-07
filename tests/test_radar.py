@@ -92,7 +92,7 @@ def test_export_exact_original_intervals(movie, tmp_path):
 def test_reports_and_srt(movie, tmp_path):
     m, c = probe(movie), cut()
     p = export_report(m,[c],tmp_path/'r.json')
-    row = json.loads(p.read_text())['cuts'][0]
+    row = json.loads(p.read_text(encoding='utf-8'))['cuts'][0]
     assert row['start_time']=='00:00:16.000' and row['end_time']=='00:00:32.000'
     assert row['duration']==16
     p = export_report(m,[c],tmp_path/'r.csv')
@@ -100,7 +100,7 @@ def test_reports_and_srt(movie, tmp_path):
         assert next(csv.DictReader(f))['duration']=='16.0'
     speech=[{'start':15, 'end':18,'text':'antes dentro','words':[
         {'start':15,'end':15.5,'word':' antes'}, {'start':17,'end':18,'word':' dentro'}]}]
-    srt=export_srt(c,speech,tmp_path/'r.srt').read_text()
+    srt=export_srt(c,speech,tmp_path/'r.srt').read_text(encoding='utf-8')
     assert '00:00:00,000 --> 00:00:02,000' in srt
     assert 'dentro' in srt and 'antes' not in srt
     with pytest.raises(ValueError): export_srt(c,[],tmp_path/'empty.srt')
@@ -210,7 +210,7 @@ def test_filmcraft_native_reopen_three_sequences(movie,tmp_path):
     (tmp_path/'inspect.json').write_text(json.dumps(info,indent=2))
     assert native.suffix=='.fcproj' and native.stat().st_size>100
     # Actual sequence content assertions use serialized native project, not a mocked API.
-    text=native.read_text()
+    text=native.read_text(encoding='utf-8')
     assert all(c.title in text for c in cuts)
     project=json.loads(text)
     (tmp_path/'native-copy.json').write_text(json.dumps(project,indent=2))

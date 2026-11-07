@@ -60,7 +60,8 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) { choco install innosetup --yes --no-progress }
           if (!(Test-Path $iscc)) { throw 'Inno Setup não encontrado' }
-          & $iscc "/DAppVersion=$version" packaging/installer.iss
+          $fileVersion = ([regex]::Match($version, '^\d+\.\d+\.\d+').Value) + '.0'
+          & $iscc "/DAppVersion=$version" "/DFileVersion=$fileVersion" packaging/installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $setup = Get-ChildItem dist/installer/*.exe | Select-Object -First 1
           $installDir = "$env:RUNNER_TEMP\RadarInstalled"

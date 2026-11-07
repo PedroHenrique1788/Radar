@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import urllib.request
 import zipfile
 
@@ -50,6 +51,10 @@ def main():
     cache = bundle/'models'/'tiny'/'.cache'
     if cache.exists():
         shutil.rmtree(cache)
+    for source in (Path(sys.base_prefix)/'LICENSE.txt', Path(sys.base_prefix)/'tcl'/'tcl8.6'/'license.terms',
+                   Path(sys.base_prefix)/'tcl'/'tk8.6'/'license.terms'):
+        if source.exists():
+            shutil.copy2(source, licenses/(source.parent.name+'-'+source.name))
     # Record licenses from installed distributions alongside all FFmpeg license files.
     import importlib.metadata
     for dist in importlib.metadata.distributions():
