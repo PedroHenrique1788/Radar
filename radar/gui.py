@@ -10,14 +10,17 @@ from .media import probe, align_bounds, executable, Cancelled
 from .model import timestamp, parse_time
 from .pipeline import analyze
 from .export import export_report, export_clip, export_srt
-from .filmcraft import locate_cli, capabilities, create_projects, open_project
+from .filmcraft import locate_cli, capabilities, create_projects, open_project, cli_from_selection
+from .settings import save_filmcraft
+from .runtime import start_process
+from .review import review_prompt
 
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title('Radar de Cortes — CefasGamer')
-        self.geometry('1180x800')
+        self.geometry(f'{min(1180, self.winfo_screenwidth()-60)}x{min(800, self.winfo_screenheight()-100)}')
         self.configure(bg='#20242b')
         style = ttk.Style(self)
         style.theme_use('clam')
@@ -28,6 +31,8 @@ class App(tk.Tk):
         self.busy = False
         self.media, self.cuts, self.speech, self.cli = None, [], [], None
         self.preview_processes = []
+        self.last_output = Path('resultados').resolve()
+        self.last_output.mkdir(exist_ok=True)
         self.preview_dir = tempfile.TemporaryDirectory(prefix='radar-preview-')
         Path('temporarios').mkdir(exist_ok=True)
         logging.basicConfig(filename='temporarios/radar.log', level=logging.INFO)
@@ -41,18 +46,22 @@ class App(tk.Tk):
         ttk.Label(self, textvariable=self.info, wraplength=1100, padding=10).pack(fill='x')
         opts = ttk.Frame(self, padding=10)
         opts.pack(fill='x')
-        self.track = ttk.Combobox(opts, state='readonly', width=40)
+        choices = ttk.Frame(opts)
+        choices.pack(fill='x')
+        limits = ttk.Frame(opts)
+        limits.pack(fill='x', pady=4)
+        self.track = ttk.Combobox(choices, state='readonly', width=40)
         self.track.pack(side='left', padx=4)
         self.count, self.minimum, self.maximum = tk.StringVar(value='10'), tk.StringVar(value='15'), tk.StringVar(value='60')
         for name, var in [('Sugestões', self.count), ('Mín. s', self.minimum), ('Máx. s', self.maximum)]:
-            ttk.Label(opts, text=name).pack(side='left', padx=4)
-            ttk.Entry(opts, textvariable=var, width=5).pack(side='left')
-        ttk.Label(opts, text='Modelo CPU').pack(side='left', padx=4)
-        self.model = ttk.Combobox(opts, values=['tiny', 'base', 'small', 'off'], state='readonly', width=8)
+            ttk.Label(limits, text=name).pack(side='left', padx=4)
+            ttk.Entry(limits, textvariable=var, width=5).pack(side='left')
+        ttk.Label(choices, text='Modelo CPU').pack(side='left', padx=4)
+        self.model = ttk.Combobox(choices, values=['tiny', 'base', 'small', 'off'], state='readonly', width=8)
         self.model.set('tiny')
         self.model.pack(side='left')
-        ttk.Button(opts, text='Analisar vídeo', command=self.analyze).pack(side='left', padx=8)
-        ttk.Button(opts, text='Cancelar', command=self.cancel.set).pack(side='left')
+        ttk.Button(limits, text='Analisar vídeo', command=self.analyze).pack(side='left', padx=8)
+        ttk.Button(limits, text='Cancelar', command=self.cancel.set).pack(side='left')
         self.progress = ttk.Progressbar(self, maximum=100)
         self.progress.pack(fill='x', padx=12)
         ttk.Label(self, textvariable=self.status, wraplength=1100, padding=10).pack(fill='x')
@@ -61,26 +70,49 @@ class App(tk.Tk):
         for col, name, width in zip(columns, ['Corte', 'Início', 'Fim', 'Duração s', 'Pontos', 'Potencial', 'Título'], [45, 115, 115, 80, 65, 120, 360]):
             self.table.heading(col, text=name, command=lambda key=col: self.sort(key))
             self.table.column(col, width=width)
-        self.table.pack(fill='both', expand=True, padx=12)
         self.table.bind('<<TreeviewSelect>>', self.show_detail)
-        self.detail = tk.Text(self, height=7, wrap='word', bg='#161a20', fg='white')
+        footer = ttk.Frame(self)
+        footer.pack(side='bottom', fill='x')
+        self.detail = tk.Text(footer, height=4, wrap='word', bg='#161a20', fg='white')
         self.detail.pack(fill='x', padx=12, pady=8)
-        bar = ttk.Frame(self, padding=8)
+        bar = ttk.Frame(footer, padding=4)
         bar.pack(fill='x')
-        for text, callback in [('Copiar tempos', self.copy), ('Reproduzir trecho', self.preview), ('Ajustar início e fim', self.adjust),
-                               ('Exportar corte MP4', self.export_video), ('Exportar relatório', self.report), ('Exportar SRT', self.srt)]:
-            ttk.Button(bar, text=text, command=callback).pack(side='left', padx=3)
-        film = ttk.Frame(self, padding=8)
+        for i, (text, callback) in enumerate([('Copiar tempos', self.copy), ('Reproduzir trecho', self.preview), ('Ajustar início e fim', self.adjust),
+                               ('Exportar corte MP4', self.export_video), ('Exportar relatório', self.report), ('Exportar SRT', self.srt), ('Copiar para ChatGPT', self.copy_for_chatgpt)]):
+            ttk.Button(bar, text=text, command=callback).grid(row=i//3, column=i%3, sticky='ew', padx=3, pady=2)
+        for i in range(3):
+            bar.columnconfigure(i, weight=1)
+        film = ttk.Frame(footer, padding=4)
         film.pack(fill='x')
-        for text, callback in [('Conectar ao FilmCraft', self.connect), ('Enviar cortes selecionados', lambda: self.film(False, True)),
+        for i, (text, callback) in enumerate([('Conectar ao FilmCraft', self.connect), ('Escolher instalação FilmCraft…', lambda: self.connect(True)), ('Enviar cortes selecionados', lambda: self.film(False, True)),
                                ('Criar projeto com todos os cortes', lambda: self.film(False, False)),
-                               ('Criar projeto individual por Short', lambda: self.film(True, True)), ('Abrir projeto para edição', self.open_film)]:
-            ttk.Button(film, text=text, command=callback).pack(side='left', padx=3)
+                               ('Criar projeto individual por Short', lambda: self.film(True, False)), ('Abrir projeto para edição', self.open_film)]):
+            ttk.Button(film, text=text, command=callback).grid(row=i//3, column=i%3, sticky='ew', padx=3, pady=2)
+        for i in range(3):
+            film.columnconfigure(i, weight=1)
+        self.table.pack(fill='both', expand=True, padx=12)
         self.protocol('WM_DELETE_WINDOW', self.close)
         self.after(100, self.poll)
 
     def error(self, exc):
-        messagebox.showerror('Radar de Cortes', str(exc))
+        detail = str(exc) or 'O programa não forneceu detalhes do erro.'
+        log = Path('temporarios/radar.log').resolve()
+        dialog = tk.Toplevel(self)
+        dialog.title('Não foi possível concluir')
+        dialog.geometry('760x360')
+        ttk.Label(dialog, text='Detalhes do erro (podem ser copiados):', padding=8).pack(anchor='w')
+        box = tk.Text(dialog, wrap='word', height=12)
+        box.pack(fill='both', expand=True, padx=8)
+        box.insert('1.0', detail + f'\n\nLog: {log}')
+        box.configure(state='disabled')
+        def copy_error():
+            self.clipboard_clear()
+            self.clipboard_append(detail)
+        buttons = ttk.Frame(dialog, padding=8)
+        buttons.pack(fill='x')
+        ttk.Button(buttons, text='Copiar erro', command=copy_error).pack(side='left')
+        ttk.Button(buttons, text='Fechar', command=dialog.destroy).pack(side='right')
+        dialog.transient(self)
 
     def selected(self, one=False):
         ids = self.table.selection()
@@ -88,11 +120,14 @@ class App(tk.Tk):
             raise ValueError('Selecione um ou mais cortes na tabela (Ctrl para vários).')
         return [c for c in self.cuts if str(c.id) in ids][:1 if one else len(self.cuts)]
 
-    def work(self, function, done):
+    def work(self, function, done, message='Processando… Aguarde ou clique em Cancelar.'):
         if self.busy:
             self.error('Aguarde a operação atual ou clique em Cancelar.')
             return
         self.busy = True
+        self.status.set(message)
+        self.progress.configure(mode='indeterminate')
+        self.progress.start(20)
         self.cancel.clear()
         def worker():
             try:
@@ -110,13 +145,21 @@ class App(tk.Tk):
             while True:
                 kind, value = self.events.get_nowait()
                 if kind == 'progress':
+                    self.progress.stop()
+                    self.progress.configure(mode='determinate')
                     self.progress['value'], msg = value
                     self.status.set(msg)
                 else:
+                    self.progress.stop()
+                    self.progress.configure(mode='determinate')
                     self.busy = False
                     if kind == 'done':
                         callback, result = value
-                        callback(result)
+                        try:
+                            callback(result)
+                        except Exception as exc:
+                            logging.exception('Falha ao exibir resultado')
+                            self.error(exc)
                     elif kind == 'error':
                         self.status.set('Falha. Consulte temporarios/radar.log.')
                         self.error(value)
@@ -158,13 +201,18 @@ class App(tk.Tk):
     def results(self, result):
         self.media, self.cuts, self.speech, warnings = result
         self.refresh()
+        if self.cuts:
+            self.table.selection_set(str(self.cuts[0].id))
+            self.table.focus(str(self.cuts[0].id))
         if warnings:
             messagebox.showwarning('Limitações da análise', '\n'.join(warnings))
 
     def refresh(self):
+        selection = self.table.selection()
         self.table.delete(*self.table.get_children())
         for c in self.cuts:
             self.table.insert('', 'end', iid=str(c.id), values=(c.id, timestamp(c.start), timestamp(c.end), f'{c.duration:.3f}', c.score, c.category, c.title))
+        self.table.selection_set([i for i in selection if self.table.exists(i)])
 
     def sort(self, key):
         attrs = {'id':'id', 'start':'start', 'end':'end', 'duration':'duration', 'score':'score', 'category':'category', 'title':'title'}
@@ -184,6 +232,16 @@ class App(tk.Tk):
             text = '\n'.join(f'Corte {c.id:02}: {timestamp(c.start)} — {timestamp(c.end)} ({c.duration:.3f} s)' for c in self.selected())
             self.clipboard_clear()
             self.clipboard_append(text)
+        except Exception as exc:
+            self.error(exc)
+
+    def copy_for_chatgpt(self):
+        try:
+            cuts = self.selected() if self.table.selection() else self.cuts
+            text = review_prompt(self.media, cuts)
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            messagebox.showinfo('Análise copiada', 'Cole o conteúdo em uma conversa no ChatGPT para revisar os cortes e pedir pesquisa de tendências. A revisão acontece naquela conversa.')
         except Exception as exc:
             self.error(exc)
 
@@ -221,11 +279,22 @@ class App(tk.Tk):
             self.error(exc)
 
     def export_video(self):
+        if self.busy:
+            return self.error('Aguarde a operação atual antes de exportar.')
         try:
             c = self.selected(True)[0]
-            path = filedialog.asksaveasfilename(defaultextension='.mp4', initialfile=f'corte_{c.id:02}.mp4')
+            path = filedialog.asksaveasfilename(defaultextension='.mp4', initialfile=f'corte_{c.id:02}.mp4',
+                filetypes=[('Vídeo MP4', '*.mp4')], initialdir=str(self.last_output), confirmoverwrite=False)
             if path:
-                self.work(lambda: export_clip(self.media, c, path, self.cancel), self.notify)
+                overwrite = Path(path).exists()
+                if overwrite and not messagebox.askyesno('Substituir MP4?', 'O arquivo já existe. Deseja substituí-lo após a exportação concluir?'):
+                    return
+                def done(output):
+                    self.last_output = Path(output).parent
+                    self.notify(f'MP4 salvo: {output}')
+                    messagebox.showinfo('MP4 exportado', f'Arquivo salvo em:\n{output}')
+                self.work(lambda: export_clip(self.media, c, path, self.cancel, overwrite), done,
+                          message=f'Exportando MP4: {timestamp(c.start)} até {timestamp(c.end)}…')
         except Exception as exc:
             self.error(exc)
 
@@ -244,35 +313,63 @@ class App(tk.Tk):
             player = executable('ffplay')
             path = Path(self.preview_dir.name) / f'preview_{len(list(Path(self.preview_dir.name).iterdir()))}.mp4'
             def done(output):
-                self.preview_processes.append(subprocess.Popen([player, '-autoexit', '-loglevel', 'error', str(output)]))
+                self.preview_processes.append(start_process([player, '-autoexit', '-loglevel', 'error', str(output)]))
                 self.notify('Prévia temporária aberta no FFplay.')
             self.work(lambda: export_clip(self.media, c, path, self.cancel), done)
         except Exception as exc:
             self.error(exc)
 
-    def connect(self):
-        cli = locate_cli()
+    def connect(self, choose=False):
+        if self.busy:
+            return self.error('Aguarde a operação atual antes de conectar ao FilmCraft.')
+        cli = None if choose else (self.cli or locate_cli())
         if not cli:
-            cli = filedialog.askopenfilename(title='Localizar filmcraft-cli (Cancelar para usar OTIO)')
-        if cli:
-            self.work(lambda: capabilities(cli), lambda result: (setattr(self, 'cli', cli), self.notify(f'CLI verificada: {cli}')))
-        else:
-            self.notify('CLI não localizada: disponível exportação OTIO para importar no FilmCraft.')
+            selected = filedialog.askopenfilename(title='Selecionar FilmCraft ou filmcraft-cli da instalação',
+                filetypes=[('FilmCraft', 'filmcraft.exe filmcraft-cli.exe filmcraft filmcraft-cli'), ('Executável', '*.exe'), ('Todos', '*.*')])
+            if selected:
+                cli = cli_from_selection(selected)
+                if not cli:
+                    return self.error('Não foi encontrado filmcraft-cli ao lado do arquivo escolhido. Selecione a pasta da versão oficial que inclui a CLI.')
+            else:
+                self.notify('FilmCraft não selecionado. Os projetos podem ser exportados como OTIO para importar no editor.')
+                return
+        def done(result):
+            self.cli = result['cli']
+            save_filmcraft(self.cli)
+            self.notify('FilmCraft localizado e verificado. A instalação será lembrada nas próximas aberturas.')
+            messagebox.showinfo('FilmCraft disponível', 'Integração verificada. Você já pode criar projetos novos e abri-los para editar.')
+        self.work(lambda: capabilities(cli), done, message='Verificando a instalação do FilmCraft…')
 
     def film(self, individual, selected):
+        if self.busy:
+            return self.error('Aguarde a operação atual antes de criar projetos.')
         try:
             cuts = self.selected() if selected else list(self.cuts)
             if not cuts:
-                raise ValueError('Não há cortes para enviar.')
-            folder = filedialog.askdirectory(title='Pasta nova/vazia para projetos e timelines')
+                raise ValueError('Não há cortes para enviar. Analise um vídeo primeiro.')
+            folder = filedialog.askdirectory(title='Pasta para os projetos (será criada uma subpasta por operação)', initialdir=str(self.last_output))
             if folder:
-                self.work(lambda: create_projects(self.media, cuts, folder, individual, self.cli, self.cancel),
-                          lambda files: self.notify('Criados: ' + ', '.join(str(p) for p in files) + '. Revise áudio OBS, resolução e proporção no editor.'))
+                cli = self.cli or locate_cli() or False
+                def done(files):
+                    if not files:
+                        return self.error('Nenhum projeto foi criado.')
+                    self.last_output = Path(files[0]).parent
+                    native = all(Path(f).suffix == '.fcproj' for f in files)
+                    label = 'projetos FilmCraft (.fcproj)' if native else 'timelines de intercâmbio (.otio)'
+                    self.notify(f'{len(files)} {label} criados em {self.last_output}')
+                    text = f'{len(files)} {label} criados.\nPasta:\n{self.last_output}'
+                    if native:
+                        messagebox.showinfo('Projetos criados', text + '\nUse “Abrir projeto para edição” para revisar.')
+                    else:
+                        messagebox.showwarning('Exportação OTIO', text + '\nA CLI não está conectada; não foi gerado .fcproj. Importe os OTIO pelo FilmCraft ou conecte uma instalação oficial para gerar projetos nativos.')
+                self.work(lambda: create_projects(self.media, cuts, folder, individual, cli, self.cancel,
+                    progress=lambda n, msg: self.events.put(('progress', (n, msg)))), done,
+                    message='Criando projetos para o FilmCraft…')
         except Exception as exc:
             self.error(exc)
 
     def open_film(self):
-        path = filedialog.askopenfilename(filetypes=[('Projeto FilmCraft', '*.fcproj'), ('Timeline OTIO', '*.otio')])
+        path = filedialog.askopenfilename(filetypes=[('Projeto FilmCraft', '*.fcproj'), ('Timeline OTIO', '*.otio')], initialdir=str(self.last_output))
         if path:
             try:
                 open_project(path, self.cli)

@@ -9,3 +9,6 @@ Os seus vídeos não são enviados a serviços de IA. Caches, logs e resultados 
 O instalador ainda não tem certificado de assinatura de código; o Windows pode mostrar “editor desconhecido”. Confira a origem deste repositório e o SHA-256 publicado. Não desative o antivírus.
 
 A pontuação é heurística, não uma previsão de viralização. Revise cortes e legendas antes de publicar.
+
+
+Correções desta versão: exportação MP4 em discos sem suporte a hard links, projetos repetidos sem colisões, detecção de instalações FilmCraft/portáteis com preferência salva, limpeza do ambiente de DLLs ao abrir ferramentas externas e erros copiáveis. Os botões confirmam onde os arquivos foram salvos. Inclui “Copiar para ChatGPT” para revisão manual com sua conta; Plus não inclui créditos de API e o aplicativo não faz chamadas pagas automaticamente.

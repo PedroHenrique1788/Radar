@@ -5,9 +5,10 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 from fractions import Fraction
 from .model import Media
-from .runtime import bundled_tool
+from .runtime import bundled_tool, start_process
 
 
 class Cancelled(Exception):
@@ -26,14 +27,17 @@ def check_cancel(cancel):
         raise Cancelled('Operação cancelada.')
 
 
-def run(args, cancel=None):
+def run(args, cancel=None, timeout=None, env=None):
     """Spool stderr/stdout to disk; never block a worker on full pipes."""
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-        p = subprocess.Popen([str(a) for a in args], stdout=out, stderr=err,
-                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        check_cancel(cancel)
+        started = time.monotonic()
+        p = start_process(args, stdout=out, stderr=err, **({'env': env} if env is not None else {}))
         try:
             while p.poll() is None:
                 check_cancel(cancel)
+                if timeout is not None and time.monotonic() - started > timeout:
+                    raise RuntimeError(f'{Path(args[0]).name} não respondeu em {timeout:g} segundos.')
                 if cancel:
                     cancel.wait(.1)
                 else:
@@ -41,7 +45,13 @@ def run(args, cancel=None):
             if p.returncode:
                 err.seek(0, 2)
                 err.seek(max(0, err.tell() - 6000))
-                raise RuntimeError(err.read().decode('utf-8', errors='replace'))
+                detail = err.read().decode('utf-8', errors='replace').strip()
+                if not detail:
+                    out.seek(0, 2)
+                    out.seek(max(0, out.tell() - 6000))
+                    detail = out.read().decode('utf-8', errors='replace').strip()
+                code = f'0x{p.returncode & 0xFFFFFFFF:08X}'
+                raise RuntimeError(f'{Path(args[0]).name} terminou com código {code}.\n{detail or "O programa não enviou detalhes. Verifique a instalação e suas dependências."}')
             out.seek(0)
             return out.read().decode('utf-8', errors='replace')
         finally:
