@@ -9,7 +9,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from .media import probe, align_bounds, executable, Cancelled
 from .model import timestamp, parse_time
 from .pipeline import analyze
-from .export import export_report, export_clip, export_srt
+from .export import export_report, export_clip, export_srt, export_transcript
 from .filmcraft import locate_cli, capabilities, create_projects, open_project, cli_from_selection
 from .settings import save_filmcraft
 from .runtime import start_process
@@ -78,7 +78,7 @@ class App(tk.Tk):
         bar = ttk.Frame(footer, padding=4)
         bar.pack(fill='x')
         for i, (text, callback) in enumerate([('Copiar tempos', self.copy), ('Reproduzir trecho', self.preview), ('Ajustar início e fim', self.adjust),
-                               ('Exportar corte MP4', self.export_video), ('Exportar relatório', self.report), ('Exportar SRT', self.srt), ('Copiar para ChatGPT', self.copy_for_chatgpt)]):
+                               ('Exportar corte MP4', self.export_video), ('Exportar relatório', self.report), ('Exportar SRT', self.srt), ('Exportar transcrição TXT', self.transcript), ('Copiar para ChatGPT', self.copy_for_chatgpt)]):
             ttk.Button(bar, text=text, command=callback).grid(row=i//3, column=i%3, sticky='ew', padx=3, pady=2)
         for i in range(3):
             bar.columnconfigure(i, weight=1)
@@ -238,7 +238,7 @@ class App(tk.Tk):
     def copy_for_chatgpt(self):
         try:
             cuts = self.selected() if self.table.selection() else self.cuts
-            text = review_prompt(self.media, cuts)
+            text = review_prompt(self.media, cuts, self.speech)
             self.clipboard_clear()
             self.clipboard_append(text)
             messagebox.showinfo('Análise copiada', 'Cole o conteúdo em uma conversa no ChatGPT para revisar os cortes e pedir pesquisa de tendências. A revisão acontece naquela conversa.')
@@ -295,6 +295,21 @@ class App(tk.Tk):
                     messagebox.showinfo('MP4 exportado', f'Arquivo salvo em:\n{output}')
                 self.work(lambda: export_clip(self.media, c, path, self.cancel, overwrite), done,
                           message=f'Exportando MP4: {timestamp(c.start)} até {timestamp(c.end)}…')
+        except Exception as exc:
+            self.error(exc)
+
+    def transcript(self):
+        if self.busy:
+            return self.error('Aguarde a análise ou exportação atual antes de salvar a transcrição.')
+        try:
+            cut = self.selected(True)[0]
+            path = filedialog.asksaveasfilename(defaultextension='.txt', initialfile=f'transcricao_corte_{cut.id:02}.txt',
+                filetypes=[('Transcrição de texto', '*.txt')], initialdir=str(self.last_output))
+            if path:
+                output = export_transcript(cut, self.speech, path)
+                self.last_output = Path(output).parent
+                self.notify(f'Transcrição salva: {output}')
+                messagebox.showinfo('Transcrição exportada', f'Transcrição do corte {cut.id:02} salva em:\n{output}')
         except Exception as exc:
             self.error(exc)
 

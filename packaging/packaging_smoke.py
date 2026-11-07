@@ -9,7 +9,7 @@ from unittest.mock import patch
 def smoke():
     from radar.media import run, executable, probe
     from radar.pipeline import analyze
-    from radar.export import export_clip, export_report
+    from radar.export import export_clip, export_report, export_transcript
     from radar.model import Cut
     from radar.gui import App
     from radar.runtime import resolve_model
@@ -46,13 +46,22 @@ def smoke():
         from radar.runtime import bundled_root
         spoken = bundled_root()/'validation'/'fala-portugues.wav'
         assert spoken.is_file()
-        segments,_ = model.transcribe(str(spoken), language='pt', beam_size=1)
+        segments,_ = model.transcribe(str(spoken), language='pt', beam_size=1, word_timestamps=True)
+        segments=list(segments)
         text=' '.join(s.text for s in segments).lower()
         assert 'teste' in text and ('vídeo' in text or 'video' in text), text
+        import wave
+        with wave.open(str(spoken)) as wav:
+            duration=wav.getnframes()/wav.getframerate()
+        speech=[{'start':s.start,'end':s.end,'text':s.text,'words':[
+            {'start':w.start,'end':w.end,'word':w.word} for w in (s.words or [])]} for s in segments]
+        transcript_file=export_transcript(Cut(3,0,duration,50,'Fala de teste','Teste'),speech,tmp/'transcricao.txt')
+        assert 'teste' in transcript_file.read_text(encoding='utf-8').lower()
+        assert '00:00:00.000' in transcript_file.read_text(encoding='utf-8')
         assert len(otio.schema.Timeline().tracks)==0
     return {'tools': tools, 'gui': True, 'media_export': True, 'whisper_int8': True,
             'silence_vad': True, 'portuguese_transcript': text, 'otio': True,
-            'portable_export':True, 'filmcraft':filmcraft_result}
+            'portable_export':True, 'transcript_txt':True, 'filmcraft':filmcraft_result}
 
 
 def filmcraft_roundtrip(media, folder):

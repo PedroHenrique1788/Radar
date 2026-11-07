@@ -63,3 +63,8 @@ O workflow Windows passou nos testes de código e no teste do executável empaco
 O botão “Copiar para ChatGPT” foi testado preservando tempos e omitindo o caminho privado do vídeo. Ele prepara uma revisão manual; nenhuma API paga foi integrada e nenhuma pesquisa de tendências é executada automaticamente pelo aplicativo. A classificação local continua heurística.
 
 O helper que baixa o editor para os testes foi protegido por `main()` para não executar downloads nem escrever arquivos durante a coleta do pytest. A importação sem efeitos colaterais foi verificada separadamente. A versão de entrega com essa correção de build é 0.1.3.
+
+
+## Transcrição TXT — 0.1.4
+
+39 testes passaram em Linux. Os novos testes verificam o botão da interface e o conteúdo do TXT: horários originais, limites ajustados manualmente, exclusão de palavras externas, ausência de arquivo vazio quando não há fala e aviso para palavras/segmentos nas bordas. O teste do pacote Windows foi ampliado para usar transcrição real com timestamps por palavra e exportar o TXT dessa amostra; a release 0.1.4 só é publicada se esse teste e os demais gates passarem.

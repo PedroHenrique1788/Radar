@@ -101,6 +101,13 @@ O botão **Copiar para ChatGPT** copia uma solicitação com os cortes seleciona
 
 **[ChatGPT Plus](https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus) e API têm cobranças separadas.** O Plus não fornece créditos para chamadas de API de um aplicativo externo. Uma integração automática poderia usar uma chave própria, com orçamento e cobrança separados, e envio explícito dos trechos escolhidos. A versão atual oferece o fluxo manual sem chave. Pesquisa de tendências ajuda a embasar uma avaliação editorial, sem garantir viralização nem produzir probabilidades de engajamento não medidas.
 
-### Atualização 0.1.3
+### Atualização 0.1.4
 
 Correções de exportação em sistemas de arquivos sem hard links, repetição de projetos na mesma pasta, detecção/persistência da instalação FilmCraft, ambiente de DLLs para processos externos no executável empacotado, mensagens copiáveis e confirmação do destino dos arquivos. A interface seleciona o primeiro resultado automaticamente, preserva seleção ao ordenar e adapta os controles a telas menores. Projetos individuais usam todos os cortes; “Enviar cortes selecionados” respeita a seleção. A automação Windows agora usa a CLI oficial real e testa também projetos conjuntos, individuais e abertura no editor a partir do aplicativo empacotado.
+
+
+## Transcrição do corte em TXT
+
+Após analisar com `tiny`, `base` ou `small`, selecione um corte e clique em **Exportar transcrição TXT**. O arquivo UTF-8 contém início/fim do corte e apenas as falas correspondentes ao intervalo, com horários do vídeo original. Se ajustar os limites, a exportação usa os novos limites, e não o texto antigo do candidato.
+
+Quando há tempos por palavra, os termos fora do corte são excluídos. Palavras parcialmente ouvidas nas bordas são sinalizadas para revisão. Se faltarem tempos por palavra, segmentos que atravessam os limites são omitidos com observação, evitando incluir frases externas como se pertencessem ao corte. Se não houver fala transcrita, o aplicativo explica o motivo e não cria um TXT vazio. **Exportar SRT** continua disponível para legendas com tempos relativos ao corte.

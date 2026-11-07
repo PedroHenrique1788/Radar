@@ -12,3 +12,6 @@ A pontuação é heurística, não uma previsão de viralização. Revise cortes
 
 
 Correções desta versão: exportação MP4 em discos sem suporte a hard links, projetos repetidos sem colisões, detecção de instalações FilmCraft/portáteis com preferência salva, limpeza do ambiente de DLLs ao abrir ferramentas externas e erros copiáveis. Os botões confirmam onde os arquivos foram salvos. Inclui “Copiar para ChatGPT” para revisão manual com sua conta; Plus não inclui créditos de API e o aplicativo não faz chamadas pagas automaticamente.
+
+
+**Novo: Exportar transcrição TXT.** Selecione um corte e salve as falas do intervalo com os horários do vídeo original. Os limites ajustados são respeitados. A exportação de legendas SRT permanece disponível. A análise precisa ter transcrição de fala (tiny/base/small).

@@ -90,9 +90,13 @@ def test_export_and_filmcraft_buttons(tmp_path,monkeypatch):
             assert button.winfo_rooty()+button.winfo_height() <= app.winfo_rooty()+app.winfo_height()
             assert button.winfo_rootx()+button.winfo_width() <= app.winfo_rootx()+app.winfo_width()
         out=tmp_path/'from-button.mp4'
-        monkeypatch.setattr(gui.filedialog,'asksaveasfilename',lambda **kw:str(out))
+        text_output=tmp_path/'transcricao.txt'
+        monkeypatch.setattr(gui.filedialog,'asksaveasfilename',lambda **kw:str(text_output if kw.get('defaultextension')=='.txt' else out))
         app.copy_for_chatgpt()
         assert '00:00:00.000' in app.clipboard_get()
+        app.speech=[{'start':.1,'end':1.8,'text':'fala do corte','words':[{'start':.1,'end':.5,'word':'fala'}, {'start':.6,'end':.8,'word':'do'}, {'start':1.,'end':1.8,'word':'corte'}]}]
+        app.transcript()
+        assert 'fala do corte' in text_output.read_text(encoding='utf-8')
         app.export_video();finish()
         assert probe(out).duration==pytest.approx(2,abs=.05)
         desktop=Path(cli).with_name('filmcraft.exe' if os.name=='nt' else 'filmcraft')

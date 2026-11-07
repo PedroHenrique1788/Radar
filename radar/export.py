@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 from .media import executable, run, check_cancel, probe
@@ -114,4 +115,54 @@ def export_srt(cut, speech, path):
     if not lines:
         raise ValueError('Não há fala transcrita neste intervalo.')
     path.write_text('\n'.join(lines), encoding='utf-8')
+    return path
+
+
+def transcript_entries(cut, speech):
+    """Select original-time words, never stale candidate text after an edit."""
+    entries=[]
+    omitted=0
+    partial_words=False
+    for segment in speech:
+        if segment['end'] <= cut.start or segment['start'] >= cut.end:
+            continue
+        if segment.get('words'):
+            words=[w for w in segment['words'] if w['end'] > cut.start and w['start'] < cut.end]
+            if not words:
+                continue
+            text=' '.join(w['word'].strip() for w in words).strip()
+            text=re.sub(r'\s+([,.;:!?])', r'\1', text)
+            start=max(cut.start,min(w['start'] for w in words))
+            end=min(cut.end,max(w['end'] for w in words))
+            partial_words |= any(w['start'] < cut.start or w['end'] > cut.end for w in words)
+        elif segment['start'] >= cut.start and segment['end'] <= cut.end:
+            start,end,text=segment['start'],segment['end'],segment['text'].strip()
+        else:
+            # Without word times, including the whole sentence could leak speech
+            # from outside the requested cut. Explain the omission instead.
+            omitted+=1
+            continue
+        if text and end > start:
+            entries.append({'start':start,'end':end,'text':text})
+    return entries,omitted,partial_words
+
+
+def export_transcript(cut, speech, path):
+    cut.validate(cut.end)
+    entries,omitted,partial=transcript_entries(cut,speech)
+    if not entries:
+        if omitted:
+            raise ValueError('Há fala sobreposta ao corte, mas faltam tempos por palavra para isolá-la. Amplie os limites ou refaça a transcrição com timestamps por palavra.')
+        raise ValueError('Este corte não tem fala transcrita. Analise o vídeo com tiny, base ou small antes de exportar a transcrição.')
+    path=safe_destination(path)
+    lines=[f'Corte {cut.id:02} — {cut.title}',
+           f'Início no original: {timestamp(cut.start)}', f'Fim no original: {timestamp(cut.end)}',
+           f'Duração: {cut.duration:.3f} segundos', 'Horários abaixo relativos ao vídeo original.', '']
+    if omitted:
+        lines.append('Observação: segmentos que cruzam os limites e não têm tempos por palavra foram omitidos.')
+    if partial:
+        lines.append('Observação: há palavras parcialmente sobrepostas aos limites. Revise o áudio nas bordas do corte.')
+    lines += [f"[{timestamp(e['start'])} --> {timestamp(e['end'])}] {e['text']}" for e in entries]
+    with path.open('x',encoding='utf-8') as out:
+        out.write('\n'.join(lines)+'\n')
     return path

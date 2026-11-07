@@ -1,16 +1,18 @@
 """Manual review through the user's ChatGPT account; no API calls or credentials."""
 import json
 from .model import timestamp
+from .export import transcript_entries
 
 
-def review_prompt(media, cuts):
+def review_prompt(media, cuts, speech=None):
     if not cuts:
         raise ValueError('Analise um vídeo e selecione cortes para revisar.')
     records=[]
     for cut in cuts:
         cut.validate(media.duration)
+        text = cut.transcript if speech is None else ' '.join(e['text'] for e in transcript_entries(cut, speech)[0])
         records.append({'id':cut.id,'inicio':timestamp(cut.start),'fim':timestamp(cut.end),
-            'duracao_segundos':cut.duration,'titulo_provisorio':cut.title,'transcricao':cut.transcript,
+            'duracao_segundos':cut.duration,'titulo_provisorio':cut.title,'transcricao':text,
             'pontuacao_heuristica_local':cut.score,'criterios_locais':cut.components,
             'justificativa_local':cut.reason})
     instructions=(
