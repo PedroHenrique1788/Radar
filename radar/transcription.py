@@ -2,6 +2,7 @@ import os
 import wave
 from pathlib import Path
 from .media import check_cancel, Cancelled
+from .runtime import resolve_model
 
 
 def transcribe(path, model_name='tiny', cancel=None, progress=lambda *a: None, model_factory=None):
@@ -9,7 +10,7 @@ def transcribe(path, model_name='tiny', cancel=None, progress=lambda *a: None, m
     if model_factory is None:
         from faster_whisper import WhisperModel
         model_factory = WhisperModel
-    model = model_factory(model_name, device='cpu', compute_type='int8', cpu_threads=min(4, os.cpu_count() or 2))
+    model = model_factory(resolve_model(model_name), device='cpu', compute_type='int8', cpu_threads=min(4, os.cpu_count() or 2))
     segments = []
     chunk_path = Path(path).with_name('speech-chunk.wav')
     try:

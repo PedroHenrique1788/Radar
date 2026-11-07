@@ -6,3 +6,6 @@ resultados/*
 !resultados/.gitkeep
 temporarios/*
 !temporarios/.gitkeep
+build/
+dist/
+bundle/

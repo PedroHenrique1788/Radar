@@ -1,0 +1,91 @@
+name: Instalador Windows
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: |
+            requirements*.txt
+            packaging/requirements-build.txt
+      - name: Instalar dependências
+        run: python -m pip install -r requirements-dev.txt -r packaging/requirements-build.txt
+      - name: Preparar FFmpeg e modelo de fala incluídos
+        run: python packaging/prepare_bundle.py
+      - name: Incluir runtime Microsoft redistribuível
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -property installationPath
+          $crt = Get-Item "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$crt) { throw "Runtime VC++ redistribuível não encontrado" }
+          New-Item bundle/vc-runtime -ItemType Directory -Force
+          Copy-Item "$($crt.FullName)\*.dll" bundle/vc-runtime/
+      - name: Testar o código no Windows
+        shell: pwsh
+        run: |
+          $env:PATH = "$pwd\bundle\ffmpeg;$env:PATH"
+          python -m pytest -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Gerar executável
+        run: python -m PyInstaller --noconfirm packaging/RadarCortes.spec
+      - name: Testar executável empacotado sem rede ou Python externo
+        shell: pwsh
+        run: |
+          $env:HF_HUB_OFFLINE = '1'
+          $report = "$env:RUNNER_TEMP\radar-frozen-smoke.json"
+          $p = Start-Process dist/RadarCortes/RadarCortes.exe -ArgumentList @('--self-test', "`"$report`"") -Wait -PassThru
+          if (Test-Path $report) { Get-Content $report }
+          if ($p.ExitCode -ne 0 -or !(Test-Path $report)) { throw 'Falha no executável empacotado' }
+          if (!(Get-Content $report -Raw | ConvertFrom-Json).ok) { throw 'Smoke test falhou' }
+      - name: Gerar instalador e validar instalação silenciosa
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.1.0-dev' }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { choco install innosetup --yes --no-progress }
+          if (!(Test-Path $iscc)) { throw 'Inno Setup não encontrado' }
+          & $iscc "/DAppVersion=$version" packaging/installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setup = Get-ChildItem dist/installer/*.exe | Select-Object -First 1
+          $installDir = "$env:RUNNER_TEMP\RadarInstalled"
+          $log = "$env:RUNNER_TEMP\radar-install.log"
+          $p = Start-Process $setup.FullName -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=`"$installDir`"", "/LOG=`"$log`"") -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content $log; throw 'Falha ao instalar' }
+          $report = "$env:RUNNER_TEMP\radar-installed-smoke.json"
+          $p = Start-Process "$installDir\RadarCortes.exe" -ArgumentList @('--self-test',"`"$report`"") -Wait -PassThru
+          if (Test-Path $report) { Get-Content $report }
+          if ($p.ExitCode -ne 0 -or !(Test-Path $report)) { throw 'Falha no aplicativo instalado' }
+          if (!(Get-Content $report -Raw | ConvertFrom-Json).ok) { throw 'Teste pós-instalação falhou' }
+          $p = Start-Process "$installDir\unins000.exe" -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or (Test-Path "$installDir\RadarCortes.exe")) { throw 'Falha ao desinstalar' }
+          $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($setup.Name)" | Set-Content dist/installer/SHA256SUMS.txt
+          Copy-Item bundle/manifest.json dist/installer/build-manifest.json
+      - name: Guardar instalador e evidências
+        uses: actions/upload-artifact@v4
+        with:
+          name: RadarCortes-Windows-x64
+          path: |
+            dist/installer/*
+            ${{ runner.temp }}/radar-*-smoke.json
+          if-no-files-found: error
+      - name: Publicar instalador na release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$env:GITHUB_REF_NAME" dist/installer/* --verify-tag --title "Radar de Cortes $env:GITHUB_REF_NAME — Windows" --notes-file packaging/release-notes.md
+        # Only this job receives repository write access; no external credentials required.
+    permissions:
+      contents: write

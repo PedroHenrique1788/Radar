@@ -2,7 +2,21 @@
 
 Aplicativo desktop em português para revisar gravações longas de gameplay e localizar intervalos aproveitáveis. Processa localmente em CPU, oferece faixas OBS, análise sonora/visual, transcrição opcional, pontuação explicável, revisão manual e exportação. Não prevê viralização nem reconhece semanticamente acontecimentos de jogos.
 
-## Instalar no Windows 10/11
+## Instalação com assistente (recomendada)
+
+Baixe o arquivo **RadarCortes-Setup-…-Windows-x64.exe** na [página de versões](https://github.com/PedroHenrique1788/Radar/releases). Execute-o, conclua o assistente e abra **Radar de Cortes** no Menu Iniciar. A Área de Trabalho pode receber um atalho opcional. Não baixe “Source code” para esse modo de instalação.
+
+O pacote inclui Python, FFmpeg/FFprobe/FFplay e o modelo `tiny` de transcrição em CPU. O uso básico funciona sem instalar dependências nem baixar modelos na primeira abertura. `base` e `small` continuam opcionais e precisam de download. FilmCraft é um aplicativo separado, opcional.
+
+Instala por usuário, sem exigir administrador. Caches, logs e resultados ficam em `%LOCALAPPDATA%\RadarCortes`, separados dos arquivos instalados. O desinstalador aparece nas configurações de aplicativos do Windows e preserva vídeos e dados do usuário. O instalador ainda não é assinado com certificado comercial; o Windows pode identificar o editor como desconhecido. Confira a origem e o SHA-256 publicado.
+
+### Gerar o instalador
+
+A automação [Instalador Windows](https://github.com/PedroHenrique1788/Radar/actions/workflows/windows-installer.yml) executa em Windows x64 quando uma tag `v*` é enviada ou quando iniciada manualmente. Instala dependências, verifica SHA-256 do FFmpeg, inclui o modelo `tiny` em revisão fixa, roda os testes, empacota com PyInstaller e gera o assistente Inno Setup. Executa testes reais no EXE e no aplicativo instalado, incluindo GUI, mídia sintética, transcrição de uma amostra de português, VAD e exportação. Só publica uma release após esses testes passarem. Instalação silenciosa e desinstalação também são verificadas. Artefatos incluem manifesto de componentes e SHA-256.
+
+As dependências de build estão em `packaging/requirements-build.txt`, entradas/receita em `packaging/` e a automação em `.github/workflows/windows-installer.yml`. Para testar o pacote manualmente: `RadarCortes.exe --self-test C:\caminho\relatorio.json`. O relatório informa falhas sem depender de uma janela de console.
+
+## Instalar pelo código-fonte no Windows 10/11
 
 1. Instale **Python 3.12 de 64 bits** (3.11 também aceito) pelo [python.org](https://www.python.org/downloads/windows/). Inclua **Tcl/Tk**, pip e Python Launcher. Não use o Python embutido de outro aplicativo.
 2. Instale FFmpeg a partir dos links de builds Windows da [página oficial](https://ffmpeg.org/download.html). Extraia e adicione a pasta `bin` ao `PATH`; abra um novo terminal e confirme `ffmpeg -version`, `ffprobe -version` e `ffplay -version`. Se preferir, configure `FFMPEG_PATH`, `FFPROBE_PATH` e `FFPLAY_PATH` com os caminhos completos dos executáveis.

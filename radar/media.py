@@ -7,6 +7,7 @@ import tempfile
 import threading
 from fractions import Fraction
 from .model import Media
+from .runtime import bundled_tool
 
 
 class Cancelled(Exception):
@@ -14,7 +15,7 @@ class Cancelled(Exception):
 
 
 def executable(name):
-    result = os.environ.get(name.upper() + '_PATH') or shutil.which(name)
+    result = os.environ.get(name.upper() + '_PATH') or bundled_tool(name) or shutil.which(name)
     if not result or not Path(result).is_file():
         raise RuntimeError(f'{name} não encontrado. Instale FFmpeg e adicione sua pasta bin ao PATH.')
     return result

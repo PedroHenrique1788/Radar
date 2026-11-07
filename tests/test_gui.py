@@ -2,7 +2,7 @@
 import os
 import pytest
 
-pytestmark = pytest.mark.skipif(not os.environ.get('DISPLAY'), reason='Requer display X11')
+pytestmark = pytest.mark.skipif(os.name != 'nt' and not os.environ.get('DISPLAY'), reason='Requer display X11')
 
 
 def test_gui_flow(tmp_path, monkeypatch):
