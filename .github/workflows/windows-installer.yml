@@ -2,6 +2,8 @@ name: Instalador Windows
 on:
   push:
     tags: ['v*']
+    branches: [main]
+    paths: ['radar/**', 'tests/**', 'packaging/**', 'requirements*.txt', '.github/workflows/windows-installer.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -36,8 +38,10 @@ jobs:
         shell: pwsh
         run: |
           $env:PATH = "$pwd\bundle\ffmpeg;$env:PATH"
-          python -m pytest -q
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest -q --junitxml=build-tests.xml
+          $testExit = $LASTEXITCODE
+          python packaging/report_pytest.py build-tests.xml
+          exit $testExit
       - name: Gerar executável
         run: python -m PyInstaller --noconfirm packaging/RadarCortes.spec
       - name: Testar executável empacotado sem rede ou Python externo
