@@ -101,6 +101,6 @@ O botão **Copiar para ChatGPT** copia uma solicitação com os cortes seleciona
 
 **[ChatGPT Plus](https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus) e API têm cobranças separadas.** O Plus não fornece créditos para chamadas de API de um aplicativo externo. Uma integração automática poderia usar uma chave própria, com orçamento e cobrança separados, e envio explícito dos trechos escolhidos. A versão atual oferece o fluxo manual sem chave. Pesquisa de tendências ajuda a embasar uma avaliação editorial, sem garantir viralização nem produzir probabilidades de engajamento não medidas.
 
-### Atualização 0.1.2
+### Atualização 0.1.3
 
 Correções de exportação em sistemas de arquivos sem hard links, repetição de projetos na mesma pasta, detecção/persistência da instalação FilmCraft, ambiente de DLLs para processos externos no executável empacotado, mensagens copiáveis e confirmação do destino dos arquivos. A interface seleciona o primeiro resultado automaticamente, preserva seleção ao ordenar e adapta os controles a telas menores. Projetos individuais usam todos os cortes; “Enviar cortes selecionados” respeita a seleção. A automação Windows agora usa a CLI oficial real e testa também projetos conjuntos, individuais e abertura no editor a partir do aplicativo empacotado.

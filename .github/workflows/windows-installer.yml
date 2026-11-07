@@ -58,7 +58,7 @@ jobs:
       - name: Gerar instalador e validar instalação silenciosa
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.1.2-dev' }
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.1.3-dev' }
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) { choco install innosetup --yes --no-progress }
           if (!(Test-Path $iscc)) { throw 'Inno Setup não encontrado' }
