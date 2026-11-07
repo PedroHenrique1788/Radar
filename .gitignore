@@ -9,3 +9,4 @@ temporarios/*
 build/
 dist/
 bundle/
+build-tests.xml

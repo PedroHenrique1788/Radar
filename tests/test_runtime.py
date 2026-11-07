@@ -40,3 +40,13 @@ def test_bundled_tools_and_explicit_override(tmp_path, monkeypatch):
     override.touch()
     monkeypatch.setenv('FFMPEG_PATH', str(override))
     assert executable('ffmpeg') == str(override)
+
+
+def test_whisper_audio_decoder_compatibility():
+    import numpy as np
+    from faster_whisper.audio import decode_audio
+    sample = Path(__file__).resolve().parents[1]/'packaging'/'validation'/'fala-portugues.wav'
+    audio = decode_audio(str(sample), sampling_rate=16000)
+    assert audio.dtype == np.float32
+    assert 10 < len(audio)/16000 < 12
+    assert float(np.max(np.abs(audio))) > .01
