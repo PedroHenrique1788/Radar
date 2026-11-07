@@ -12,9 +12,9 @@ def main():
     folder = prepare_desktop()
     try:
         if '--self-test' in sys.argv:
-            from packaging_smoke import smoke
             output = Path(sys.argv[sys.argv.index('--self-test') + 1]).resolve()
             try:
+                from packaging_smoke import smoke
                 report = smoke()
                 output.write_text(json.dumps({'ok': True, **report}, indent=2), encoding='utf-8')
             except Exception:

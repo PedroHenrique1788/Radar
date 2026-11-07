@@ -50,9 +50,8 @@ jobs:
           $env:HF_HUB_OFFLINE = '1'
           $report = "$env:RUNNER_TEMP\radar-frozen-smoke.json"
           $p = Start-Process dist/RadarCortes/RadarCortes.exe -ArgumentList @('--self-test', "`"$report`"") -Wait -PassThru
-          if (Test-Path $report) { Get-Content $report }
-          if ($p.ExitCode -ne 0 -or !(Test-Path $report)) { throw 'Falha no executável empacotado' }
-          if (!(Get-Content $report -Raw | ConvertFrom-Json).ok) { throw 'Smoke test falhou' }
+          python packaging/check_smoke.py $report
+          if ($p.ExitCode -ne 0 -or $LASTEXITCODE -ne 0) { exit 1 }
       - name: Gerar instalador e validar instalação silenciosa
         shell: pwsh
         run: |
@@ -70,9 +69,8 @@ jobs:
           if ($p.ExitCode -ne 0) { Get-Content $log; throw 'Falha ao instalar' }
           $report = "$env:RUNNER_TEMP\radar-installed-smoke.json"
           $p = Start-Process "$installDir\RadarCortes.exe" -ArgumentList @('--self-test',"`"$report`"") -Wait -PassThru
-          if (Test-Path $report) { Get-Content $report }
-          if ($p.ExitCode -ne 0 -or !(Test-Path $report)) { throw 'Falha no aplicativo instalado' }
-          if (!(Get-Content $report -Raw | ConvertFrom-Json).ok) { throw 'Teste pós-instalação falhou' }
+          python packaging/check_smoke.py $report
+          if ($p.ExitCode -ne 0 -or $LASTEXITCODE -ne 0) { exit 1 }
           $p = Start-Process "$installDir\unins000.exe" -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
           if ($p.ExitCode -ne 0 -or (Test-Path "$installDir\RadarCortes.exe")) { throw 'Falha ao desinstalar' }
           $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
