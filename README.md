@@ -62,11 +62,11 @@ Cada faixa de áudio OBS é convertida em um WAV estéreo separado, com atraso o
 
 O MCP oficial (`filmcraft-cli mcp`) e o canal JSON (`filmcraft --control 9876`) foram investigados. A criação usa a CLI headless para manter a sessão atual do usuário intacta. Nenhum projeto existente é alterado; os comandos sempre partem de uma sessão nova. O módulo possui uma função de inspeção local, limitada a leitura, para o canal JSON: aceita apenas `127.0.0.1` e lê `FILMCRAFT_CONTROL_TOKEN` do ambiente, sem gravá-lo em logs ou argumentos. Caso use esse canal manualmente, gere 64 caracteres hexadecimais aleatórios para cada sessão e herde a mesma variável nos processos. O Radar não precisa desse token para o fluxo normal via CLI.
 
-Limites: VFR é representado pela taxa nominal do editor, portanto revise arredondamentos no FilmCraft. Preservação de HDR, colorimetria avançada, rotação de metadados, pixel aspect ratio não quadrado e áudio multicanal não foram validados; a versão inicial se destina a gameplay SDR com pixels quadrados. O desktop Windows e o canal JSON/MCP ao vivo não foram testados nesta máquina Linux. A abertura nativa e exportação pela CLI Linux foram testadas.
+Limites: VFR é representado pela taxa nominal do editor, portanto revise arredondamentos no FilmCraft. Preservação de HDR, colorimetria avançada, rotação de metadados, pixel aspect ratio não quadrado e áudio multicanal não foram validados; a versão inicial se destina a gameplay SDR com pixels quadrados. O FilmCraft desktop no Windows e seu canal JSON/MCP ao vivo não foram testados; a automação validada do editor usa a CLI Linux. A abertura nativa e exportação pela CLI Linux foram testadas.
 
 ## Desenvolvimento e testes
 
-Python 3.12 + FFmpeg/FFprobe, Tkinter, NumPy, faster-whisper (CTranslate2 CPU int8) e OpenTimelineIO. Dependências diretas fixadas em `requirements.txt`; as transitivas são resolvidas pelo pip. Tkinter vem com Python no Windows; no Linux é um componente do sistema. A compatibilidade das bibliotecas foi confirmada por instalação/importação em Python 3.12 Linux; instalador BAT e wheels Windows exigem validação nativa.
+Python 3.12 + FFmpeg/FFprobe, Tkinter, NumPy, faster-whisper (CTranslate2 CPU int8) e OpenTimelineIO. Dependências diretas fixadas em `requirements.txt`; as transitivas são resolvidas pelo pip. Tkinter vem com Python no Windows; no Linux é um componente do sistema. As dependências e a GUI são verificadas em Python 3.12 Linux e Windows x64. PyAV é fixado em 16.0.1 porque a versão 19 removeu um argumento usado pelo faster-whisper 1.2.1; há um teste de decodificação real para detectar essa incompatibilidade. Os BAT de instalação pelo código-fonte não são executados na automação; o instalador pronto usa PyInstaller e Inno Setup.
 
 ```bash
 python -m venv .venv
@@ -86,7 +86,7 @@ No Windows, substitua `.venv/bin/python` por `.venv\Scripts\python.exe`. Para um
 
 Testes geram mídia sintética com FFmpeg e verificam leitura, duas faixas OBS, duração, HH:MM:SS.mmm, offsets, VFR, ausência de áudio/fala, falha de transcrição, offsets entre blocos de 300 s, cancelamento, seleção/deduplicação, relatórios, SRT, limites dos quadros e sincronismo após recodificação. A integração real usa três intervalos conhecidos, salva/reabre `.fcproj` e verifica sequências, faixas e tempos; exporta cada sequência pela CLI e confere duração, imagem e sincronismo dos tons. O teste de GUI verifica metadados, seleção, detalhes, cópia e ajuste assíncrono.
 
-O teste de transcrição entre blocos usa um transcritor simulado para verificar deslocamentos; **não valida reconhecimento real de fala**. Esse teste exige separadamente um modelo e uma amostra de português conhecida.
+O teste de deslocamento entre blocos usa um transcritor simulado; ele não mede reconhecimento de fala. Separadamente, o teste do executável Windows carrega os pesos incluídos e transcreve uma amostra sintética conhecida de português com o modelo real, em modo offline. Esse teste confirma funcionamento básico, sem medir a qualidade em gravações reais de gameplay.
 
 ## Organização e próximos passos
 

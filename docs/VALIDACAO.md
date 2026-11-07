@@ -1,5 +1,7 @@
 # Validação — 7 de novembro de 2026
 
+## Registro inicial, antes do instalador Windows
+
 Ambiente atual: Linux x86_64, Python 3.12.14, FFmpeg/FFprobe 7.1.5, Tk 9.0, NumPy 2.2.6, faster-whisper 1.2.1, OpenTimelineIO 0.18.1, FilmCraft CLI oficial 0.18.0. Testes GUI em Xvfb 1280×900; sem GPU necessária para análise e exportação.
 
 Comando final executado:
@@ -34,3 +36,15 @@ O arquivo oficial FilmCraft foi validado com SHA256SUMS da release via HTTPS. Xv
 - Publicação e restauração em nova tarefa pertencem à interface de ambientes e não foram executadas por este trabalho.
 
 Configuração reutilizável salva: `install_script`, `start_skill`, associação do checkout `Radar` e domínios de download de modelos. Salvar o rascunho não aplica a rede nem publica o snapshot. O repositório remoto estava vazio e o checkout em branch local ainda sem commits; os arquivos implementados permanecem locais, sem push.
+
+
+## Validação adicional do pacote Windows
+
+A automação nativa [Instalador Windows](https://github.com/PedroHenrique1788/Radar/actions/workflows/windows-installer.yml) verifica os executáveis no runner Windows Server 2022 x64 com Python 3.12. Isso não equivale a um teste manual no computador do usuário com Windows 10/11.
+
+- A suíte atual passou em Linux: **27 testes**, com GUI Xvfb e integração real FilmCraft. No Windows, a suíte passou com o teste opcional da CLI FilmCraft ignorado, pois o editor não foi instalado nesse runner.
+- O executável PyInstaller passou no teste com `HF_HUB_OFFLINE=1`: GUI, FFmpeg/FFprobe/FFplay incluídos, leitura e exportação MP4, JSON, OpenTimelineIO, carregamento de modelo tiny CPU int8, VAD sobre silêncio e reconhecimento real de uma amostra sintética de português. A amostra é gerada com eSpeak, não com gravação pessoal. Não mede precisão em gameplay.
+- A validação real detectou incompatibilidade entre faster-whisper 1.2.1 e PyAV 19. O projeto agora fixa **PyAV 16.0.1**, com um teste adicional do decodificador.
+- O modelo tiny é incluído na revisão `d90ca5fe260221311c53c58e660288d3deb8d356`; não depende do primeiro download no computador do usuário. Os resultados desta automação substituem a pendência inicial de reconhecimento básico no pacote Windows; o download direto de pesos nesta máquina cloud continuou bloqueado no CDN.
+- O pacote inclui os runtimes Python/Visual C++, FFmpeg com verificação SHA-256 e licenças dos componentes. Não há assinatura digital de editor nesta versão.
+- A execução [42419007223](https://github.com/PedroHenrique1788/Radar/actions/runs/42419007223) também passou na geração Inno Setup, instalação silenciosa por usuário, repetição do teste funcional no aplicativo instalado e desinstalação. O artefato gerado tem aproximadamente 279 MB. A publicação de uma versão usa novamente esses mesmos gates antes de liberar o download.
