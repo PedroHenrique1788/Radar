@@ -48,7 +48,7 @@ Features e transcrições bem-sucedidas são reutilizadas em `temporarios/`, ide
 
 ## FilmCraft
 
-Baseado na [documentação oficial de agentes](https://github.com/storytold/filmcraft/blob/main/docs/agents.md), [protocolo de controle](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) e importador OTIO. Validado com **CLI 0.18.0 para Linux e Windows x64**, incluindo abertura de projeto no FilmCraft desktop Windows pelo teste do executável empacotado. Nenhuma API de IA paga é usada.
+Baseado na [documentação oficial de agentes](https://github.com/storytold/filmcraft/blob/main/docs/agents.md), [protocolo de controle](https://github.com/storytold/filmcraft/blob/main/docs/control-protocol.md) e importador OTIO. Validado com **CLI 0.18.0 para Linux e Windows x64**, incluindo abertura de projeto no FilmCraft desktop Windows pelo teste do executável empacotado. Esse fluxo FilmCraft é local e não usa API de IA.
 
 1. Instale o FilmCraft desktop oficial no Windows. A CLI acompanha o MSI, normalmente em `%LOCALAPPDATA%\Programs\ArtCraft\FilmCraft\filmcraft-cli.exe` ou `C:\Program Files\ArtCraft\FilmCraft\filmcraft-cli.exe`.
 2. Clique em **Conectar ao FilmCraft**. O Radar procura esses locais e o PATH, ou permite selecionar o executável do editor, a CLI ou usar a opção “Escolher instalação FilmCraft…”. Consulta o registro do instalador e lembra a instalação selecionada. Também aceita `FILMCRAFT_CLI`. Confere `--help` e os esquemas reais de `file.import` e `sequence.settings` antes de editar.
@@ -99,7 +99,7 @@ Segunda etapa: análise semântica multimodal local e mensurada, avaliação em 
 
 O botão **Copiar para ChatGPT** copia uma solicitação com os cortes selecionados, horários, transcrição e critérios locais. Cole o conteúdo numa conversa no ChatGPT e peça revisão de contexto e pesquisa de tendências, com fontes e datas. O arquivo de vídeo e seu caminho privado não são incluídos nesse texto. A revisão é manual e ocorre naquela conversa; o aplicativo não envia dados automaticamente.
 
-**[ChatGPT Plus](https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus) e API têm cobranças separadas.** O Plus não fornece créditos para chamadas de API de um aplicativo externo. Uma integração automática poderia usar uma chave própria, com orçamento e cobrança separados, e envio explícito dos trechos escolhidos. A versão atual oferece o fluxo manual sem chave. Pesquisa de tendências ajuda a embasar uma avaliação editorial, sem garantir viralização nem produzir probabilidades de engajamento não medidas.
+**[ChatGPT Plus](https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus) e API têm cobranças separadas.** O Plus não fornece créditos para chamadas de API de um aplicativo externo. Além do fluxo manual sem chave, a versão 0.2.0 oferece revisão opcional pelo Gemini com chave própria, envio explícito dos trechos escolhidos e cota/cobrança sob controle do projeto Google. Pesquisa de tendências ajuda a embasar uma avaliação editorial, sem garantir viralização nem produzir probabilidades de engajamento não medidas.
 
 ### Atualização 0.1.4
 
@@ -111,3 +111,23 @@ Correções de exportação em sistemas de arquivos sem hard links, repetição 
 Após analisar com `tiny`, `base` ou `small`, selecione um corte e clique em **Exportar transcrição TXT**. O arquivo UTF-8 contém início/fim do corte e apenas as falas correspondentes ao intervalo, com horários do vídeo original. Se ajustar os limites, a exportação usa os novos limites, e não o texto antigo do candidato.
 
 Quando há tempos por palavra, os termos fora do corte são excluídos. Palavras parcialmente ouvidas nas bordas são sinalizadas para revisão. Se faltarem tempos por palavra, segmentos que atravessam os limites são omitidos com observação, evitando incluir frases externas como se pertencessem ao corte. Se não houver fala transcrita, o aplicativo explica o motivo e não cria um TXT vazio. **Exportar SRT** continua disponível para legendas com tempos relativos ao corte.
+
+## Interface CefasGamer e Gemini — 0.2.0
+
+A navegação agora segue quatro etapas: **Selecionar vídeo → Analisar → Revisar cortes → Exportar**. O azul foi indicado pelo proprietário do canal. Em **Preferências**, é possível ajustar nome/cor e carregar seu logotipo PNG. O monograma CG é apenas o padrão do aplicativo; não é uma cópia do logotipo do canal. O layout mantém as ações avançadas fora da tela principal. A imagem na prévia é um quadro de referência; **Reproduzir** abre o trecho com áudio no player FFplay.
+
+![Interface de desenvolvimento com vídeo sintético, sem dados pessoais](docs/interface-azul.png)
+
+### Configurar sua própria chave Gemini
+
+1. Em **Preferências → Gemini**, cole uma chave nova do Google AI Studio no campo protegido visualmente. Uma chave compartilhada em conversa deve ser revogada/substituída. Nenhuma chave pessoal acompanha este repositório ou o instalador.
+2. **Guardar chave** mantém a chave apenas na sessão. Se marcar **Salvar protegida para este usuário do Windows**, ela será cifrada com Windows DPAPI, no escopo do usuário atual, em `%LOCALAPPDATA%\RadarCortes\config\gemini_key.dpapi`. Ela não entra no JSON comum de preferências. No Linux, use a chave na sessão ou `GEMINI_API_KEY`; não há gravação de chave em texto puro. **Remover chave salva** apaga a cópia protegida e a chave da sessão; uma variável de ambiente configurada fora do app permanece sob controle do usuário.
+3. Clique em **Validar e listar modelos**, escolha um modelo disponível para sua conta e salve as preferências. A lista vem do Google, sem fixar um modelo que possa ser descontinuado.
+4. Volte a **Revisar cortes**, selecione os trechos e clique em **Revisar com Gemini**. A primeira solicitação daquela combinação de chave/modelo/pesquisa pede confirmação. Somente horários, transcrição e critérios locais dos trechos escolhidos são enviados; caminho privado e arquivo de vídeo ficam fora da requisição.
+5. Leia a aba **Gemini**. A nota editorial aparece separada da pontuação local. Limites, IDs e nota local não são alterados. Alterar limites/transcrição invalida a revisão daquela versão do corte. É possível salvar a revisão em JSON na etapa **Exportar**.
+
+**Cota gratuita e faturamento são controlados pelo projeto no Google.** O app não ativa faturamento, não troca automaticamente de modelo e não repete uma solicitação após erro de cota. Limites/indisponibilidade/credenciais inválidas geram mensagem. Confira preços e cotas no AI Studio, especialmente antes de habilitar **Google Search**.
+
+A pesquisa é opcional e desativada por padrão. Quando o Google retorna referências de grounding, o app mostra os links. Se não vierem referências, indica que não há pesquisa confirmada; não trata links inventados no texto como fontes verificadas. A avaliação continua editorial: contexto e tendências não garantem viralização. O fluxo **Copiar para ChatGPT** continua disponível para revisão manual sem integração de API.
+
+Os testes do cliente Gemini usam respostas controladas e não consomem a chave/cota do usuário. Foram verificados formato REST conforme o SDK oficial, envio limitado aos trechos, limites de tamanho, erros 400/401/403/404/429/503, ausência de chave em URL/JSON/erros, cancelamento, validação de IDs/notas e separação entre nota local e editorial. O teste do pacote Windows também verifica o cliente sem rede e o armazenamento DPAPI. Esses testes não comprovam a validade de uma chave real ou a cota atual da sua conta; use o botão de validação para isso.

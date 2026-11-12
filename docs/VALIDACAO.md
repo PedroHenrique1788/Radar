@@ -68,3 +68,13 @@ O helper que baixa o editor para os testes foi protegido por `main()` para não 
 ## Transcrição TXT — 0.1.4
 
 39 testes passaram em Linux. Os novos testes verificam o botão da interface e o conteúdo do TXT: horários originais, limites ajustados manualmente, exclusão de palavras externas, ausência de arquivo vazio quando não há fala e aviso para palavras/segmentos nas bordas. O teste do pacote Windows foi ampliado para usar transcrição real com timestamps por palavra e exportar o TXT dessa amostra; a release 0.1.4 só é publicada se esse teste e os demais gates passarem.
+
+## Interface azul e Gemini opcional — 0.2.0
+
+O azul foi fornecido pelo usuário. O YouTube não pôde ser inspecionado pela política de rede desta máquina; não foi copiado nem inventado um logotipo oficial. Nome, cor e PNG local podem ser configurados. A captura `interface-azul.png` mostra a aplicação real em desenvolvimento (Tk 8.6/Linux), usando vídeo e dados sintéticos, não uma imagem gerada nem uma captura do computador do usuário.
+
+O cliente opcional Gemini usa REST `v1beta/models` e `generateContent`, conforme os conversores/documentação oficiais do repositório `googleapis/python-genai`. A chave vai em `x-goog-api-key`, não na URL; redirecionamentos HTTP são recusados para não encaminhá-la a outro destino. O JSON contém só dados dos cortes escolhidos. Erros do provedor são convertidos em mensagens sem corpo bruto de autenticação. A resposta é validada por ID, nota finita e tamanho; nenhuma resposta muda os tempos ou scores locais. Pesquisa confirmada depende de referências retornadas em `groundingMetadata`.
+
+Nenhuma chave fornecida na conversa foi inserida em arquivos, comandos, logs, GitHub ou testes. As provas de API usam credenciais fictícias e transporte controlado. Não houve validação online com uma credencial real. A política de rede corrente bloqueou YouTube e `generativelanguage.googleapis.com`; domínios adicionais foram propostos no rascunho de configuração, sem publicação automática do ambiente.
+
+O armazenamento persistente é opcional e usa DPAPI do usuário no Windows. Os testes Windows verificam cifrar, ler e remover uma credencial fictícia, inclusive no executável empacotado. O aplicativo também permite uso só em memória; no Linux a persistência é recusada explicitamente.

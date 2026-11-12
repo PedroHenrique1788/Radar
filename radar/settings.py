@@ -13,9 +13,11 @@ def read_settings():
         return {}
 
 
-def save_filmcraft(cli):
+def save_settings(updates):
+    if any('key' in k.lower() or 'token' in k.lower() for k in updates):
+        raise ValueError('Credenciais não devem ser gravadas nas preferências comuns.')
     data = read_settings()
-    data['filmcraft_cli'] = str(Path(cli).resolve())
+    data.update(updates)
     folder = Path('temporarios')
     folder.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix='settings-', suffix='.json', dir=folder)
@@ -25,3 +27,7 @@ def save_filmcraft(cli):
         os.replace(name, folder/'settings.json')
     finally:
         Path(name).unlink(missing_ok=True)
+
+
+def save_filmcraft(cli):
+    save_settings({'filmcraft_cli': str(Path(cli).resolve())})

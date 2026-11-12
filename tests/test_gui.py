@@ -87,6 +87,7 @@ def test_export_and_filmcraft_buttons(tmp_path,monkeypatch):
                 if isinstance(child,gui.ttk.Button):yield child
                 yield from buttons(child)
         for button in buttons(app):
+            if not button.winfo_viewable():continue
             assert button.winfo_rooty()+button.winfo_height() <= app.winfo_rooty()+app.winfo_height()
             assert button.winfo_rootx()+button.winfo_width() <= app.winfo_rootx()+app.winfo_width()
         out=tmp_path/'from-button.mp4'
@@ -97,6 +98,8 @@ def test_export_and_filmcraft_buttons(tmp_path,monkeypatch):
         app.speech=[{'start':.1,'end':1.8,'text':'fala do corte','words':[{'start':.1,'end':.5,'word':'fala'}, {'start':.6,'end':.8,'word':'do'}, {'start':1.,'end':1.8,'word':'corte'}]}]
         app.transcript()
         assert 'fala do corte' in text_output.read_text(encoding='utf-8')
+        app.load_preview_frame();finish()
+        assert app._preview_image.width()>0
         app.export_video();finish()
         assert probe(out).duration==pytest.approx(2,abs=.05)
         desktop=Path(cli).with_name('filmcraft.exe' if os.name=='nt' else 'filmcraft')
@@ -118,3 +121,63 @@ def test_export_and_filmcraft_buttons(tmp_path,monkeypatch):
         assert opened and str(grouped[0]) in opened[0]
     finally:
         app.close()
+
+
+def test_wizard_navigation_and_gemini_opt_in(tmp_path,monkeypatch):
+    import time
+    from radar.gui import App
+    from radar.model import Media,Cut
+    from radar import gui
+    from radar.gemini import cut_record,record_signature
+    monkeypatch.chdir(tmp_path)
+    app=App();errors=[];calls=[]
+    monkeypatch.setattr(app,'error',lambda e:errors.append(str(e)))
+    key='fake-session-key-for-ui-test'
+    class Client:
+        def __init__(self,k):assert k==key
+        def list_models(self,cancel=None):return ['gemini-test-flash']
+        def review(self,media,cuts,speech,model,search,cancel):
+            calls.append((cuts,model,search))
+            records=[cut_record(c,speech) for c in cuts]
+            return {'model':model,'created_at':'test','reviews':[{'id':1,'nota_editorial':77,'titulo':'Sugestão IA',
+                'justificativa':'Fala com contexto','sugestao_edicao':'Corte no desfecho','limitacoes':'Não vi o vídeo'}],
+                'input_signatures':{str(r['id']):record_signature(r) for r in records},
+                'sources':[],'search_requested':search,'search_confirmed':False}
+    monkeypatch.setattr(gui,'GeminiClient',Client)
+    def finish():
+        deadline=time.monotonic()+5
+        while app.busy and time.monotonic()<deadline:
+            app.update();time.sleep(.02)
+        assert not app.busy
+        app.update()
+        assert not errors,errors
+    try:
+        assert app.current_page=='video'
+        m=Media('/tmp/no-media.mp4',100,160,90,25,'h264',0,[],0)
+        app.loaded(m);app.update()
+        assert app.current_page=='analysis'
+        c=Cut(1,10,30,45,'Título local','Motivo local')
+        speech=[{'start':12,'end':15,'text':'Fala para revisão','words':[]}]
+        app.results((m,[c],speech,[]));app.update()
+        assert app.current_page=='review' and app.table.selection()==('1',)
+        assert not app.pages['settings'].winfo_viewable()
+        app.show_page('settings');app.update()
+        app.gemini_key_input.set(key)
+        app.connect_gemini();finish()
+        assert app.gemini_model.get()=='gemini-test-flash'
+        app.save_gemini_preferences()
+        assert key not in (tmp_path/'temporarios/settings.json').read_text(encoding='utf-8')
+        app.show_page('review')
+        monkeypatch.setattr(gui.messagebox,'askyesno',lambda *a:False)
+        app.review_gemini()
+        assert not calls and not app.busy
+        monkeypatch.setattr(gui.messagebox,'askyesno',lambda *a:True)
+        app.review_gemini();finish()
+        assert len(calls)==1 and app._valid_ai(c)['nota_editorial']==77
+        assert (c.start,c.end,c.score,c.title)==(10,30,45,'Título local')
+        assert '77' in app.ai_view.get('1.0','end')
+        c.start=11
+        assert app._valid_ai(c) is None
+        app.forget_gemini_key()
+        assert not app._session_key and not app.gemini_key_input.get()
+    finally:app.close()

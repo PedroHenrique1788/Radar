@@ -59,9 +59,10 @@ def smoke():
         assert 'teste' in transcript_file.read_text(encoding='utf-8').lower()
         assert '00:00:00.000' in transcript_file.read_text(encoding='utf-8')
         assert len(otio.schema.Timeline().tracks)==0
+        gemini_result=gemini_offline_smoke(tmp)
     return {'tools': tools, 'gui': True, 'media_export': True, 'whisper_int8': True,
             'silence_vad': True, 'portuguese_transcript': text, 'otio': True,
-            'portable_export':True, 'transcript_txt':True, 'filmcraft':filmcraft_result}
+            'portable_export':True, 'transcript_txt':True, 'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
 
 
 def filmcraft_roundtrip(media, folder):
@@ -137,3 +138,33 @@ def filmcraft_desktop(cli, project, folder):
             p.terminate()
             try:p.wait(timeout=10)
             except Exception:p.kill();p.wait()
+
+
+
+def gemini_offline_smoke(folder):
+    # No real credential or network request is used by package validation.
+    import io,json
+    from radar.credentials import KeyStore
+    from radar.gemini import GeminiClient
+    from radar.model import Media,Cut
+    key='package-smoke-fake-credential-not-a-real-api-key'
+    default_client=GeminiClient(key)  # construct packaged HTTPS/TLS handlers too
+    class Response:
+        def open(self,request,timeout):
+            assert key not in request.full_url
+            assert request.get_header('X-goog-api-key')==key
+            content={'cortes':[{'id':1,'nota_editorial':70,'titulo':'Exemplo','justificativa':'Fala com contexto',
+                'sugestao_edicao':'Revisar o desfecho','limitacoes':'Sem vídeo e sem pesquisa'}]}
+            return io.BytesIO(json.dumps({'candidates':[{'finishReason':'STOP','content':{'parts':[{'text':json.dumps(content)}]}}]}).encode())
+    cut=Cut(1,0,20,45,'Título local','Teste','Olha como consegui terminar esta missão!')
+    result=GeminiClient(key,Response()).review(Media('/not-sent.mp4',30,160,90,25,'h264',0,[],0),[cut],model='gemini-smoke-flash')
+    assert result['reviews'][0]['nota_editorial']==70
+    assert cut.score==45 and cut.start==0 and cut.end==20
+    protected=False
+    if os.name=='nt':
+        store=KeyStore(folder/'test-key.dpapi')
+        store.save(key)
+        assert store.load()==key and key.encode() not in store.path.read_bytes()
+        store.delete()
+        protected=True
+    return {'request_response':True,'local_times_preserved':True,'windows_dpapi':protected}
