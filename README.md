@@ -30,8 +30,8 @@ Use `tiny` no i7-8565U com MX110; `base` ou `small` consomem mais tempo e memór
 1. **Selecionar vídeo** (MP4, MKV, MOV ou AVI). Veja duração, resolução, FPS, codec e faixas disponíveis.
 2. Escolha o microfone OBS para transcrição/análise sonora ou **Áudio completo (mix)**. A escolha afeta a análise; os MP4 exportados preservam todas as faixas de áudio.
 3. Configure quantidade (1–20, padrão 10) e duração (padrão 15–60 s). Clique em **Analisar vídeo**. A interface continua responsiva; **Cancelar** interrompe operações e remove temporários de processamento.
-4. Clique em um resultado para ler a justificativa, os componentes da pontuação e a transcrição. Clique no cabeçalho **Pontos** ou **Início** para ordenar. Ctrl permite selecionar vários cortes.
-5. **Reproduzir trecho** cria uma prévia temporária recodificada e abre FFplay. **Ajustar início e fim** aceita `HH:MM:SS.mmm` e alinha aos quadros originais. O score permanece o da análise anterior após ajustes manuais.
+4. Em **Revisar cortes**, clique em um resultado para ler a justificativa, os componentes da pontuação e a transcrição. Use **Por tempo** ou **Por potencial** para ordenar. Ctrl permite selecionar vários cortes.
+5. **Reproduzir** cria uma prévia temporária recodificada e abre FFplay. Os campos **Início no original** e **Fim no original** aceitam `HH:MM:SS.mmm`; clique em **Aplicar limites** para alinhar aos quadros originais. O score permanece o da análise anterior após ajustes manuais.
 6. **Copiar tempos**, exportar **JSON/CSV**, **SRT** ou **MP4**. O vídeo original é sempre protegido. Um MP4 existente só é substituído após confirmação e após concluir a nova exportação; relatórios e legendas usam destinos novos. Os MP4 mantêm resolução, proporção e faixas de áudio; não há conversão automática para 9:16.
 
 A pontuação soma gancho lexical (até 30), variação sonora (25), atividade visual (20) e quantidade de fala completa disponível (25). Alto ≥70, médio ≥45, baixo <45. “Fala completa” é uma aproximação lexical, não uma avaliação semântica de começo/meio/fim. Sons constantes ou silêncio não geram sugestões por si só; volume sem fala/atividade visual não basta. O sistema pode retornar menos de 5 sugestões ou nenhuma. Revise ganchos, contexto, emoção e desfecho; os títulos são trechos literais da fala ou descrições neutras de atividade.
@@ -52,7 +52,7 @@ Baseado na [documentação oficial de agentes](https://github.com/storytold/film
 
 1. Instale o FilmCraft desktop oficial no Windows. A CLI acompanha o MSI, normalmente em `%LOCALAPPDATA%\Programs\ArtCraft\FilmCraft\filmcraft-cli.exe` ou `C:\Program Files\ArtCraft\FilmCraft\filmcraft-cli.exe`.
 2. Clique em **Conectar ao FilmCraft**. O Radar procura esses locais e o PATH, ou permite selecionar o executável do editor, a CLI ou usar a opção “Escolher instalação FilmCraft…”. Consulta o registro do instalador e lembra a instalação selecionada. Também aceita `FILMCRAFT_CLI`. Confere `--help` e os esquemas reais de `file.import` e `sequence.settings` antes de editar.
-3. Selecione os cortes e use **Enviar cortes selecionados** para criar um projeto novo com uma sequência por Short. **Criar projeto com todos os cortes** usa todos os resultados; **Criar projeto individual por Short** gera um `.fcproj` por corte encontrado. Escolha uma pasta de saída. Cada operação cria uma subpasta própria, permitindo repetir exportações sem colidir nem alterar projetos anteriores.
+3. Na etapa **Exportar**, selecione os cortes e use **Selecionados em um projeto** para criar um projeto novo com uma sequência por Short. **Todos em um projeto** usa todos os resultados; **Um projeto por Short** gera um `.fcproj` por corte encontrado. Escolha uma pasta de saída. Cada operação cria uma subpasta própria, permitindo repetir exportações sem colidir nem alterar projetos anteriores.
 4. O Radar gera timelines OTIO, WAVs auxiliares e um roteiro JSONL. A CLI importa o vídeo original, os áudios sincronizados, define títulos/resolução/FPS e salva `.fcproj` com `--save-as`. Em seguida reabre o projeto para conferir sua leitura. Preserve os WAVs, timelines e vídeo original nos mesmos locais. O projeto referencia mídia, não a incorpora.
 5. **Abrir projeto para edição** inicia o FilmCraft localizado junto à CLI (ou a associação de arquivos do Windows). Revise e exporte no editor.
 
@@ -108,7 +108,7 @@ Correções de exportação em sistemas de arquivos sem hard links, repetição 
 
 ## Transcrição do corte em TXT
 
-Após analisar com `tiny`, `base` ou `small`, selecione um corte e clique em **Exportar transcrição TXT**. O arquivo UTF-8 contém início/fim do corte e apenas as falas correspondentes ao intervalo, com horários do vídeo original. Se ajustar os limites, a exportação usa os novos limites, e não o texto antigo do candidato.
+Após analisar com `tiny`, `base` ou `small`, selecione um corte e clique em **TXT** na revisão ou **Transcrição TXT** na etapa Exportar. O arquivo UTF-8 contém início/fim do corte e apenas as falas correspondentes ao intervalo, com horários do vídeo original. Se ajustar os limites, a exportação usa os novos limites, e não o texto antigo do candidato.
 
 Quando há tempos por palavra, os termos fora do corte são excluídos. Palavras parcialmente ouvidas nas bordas são sinalizadas para revisão. Se faltarem tempos por palavra, segmentos que atravessam os limites são omitidos com observação, evitando incluir frases externas como se pertencessem ao corte. Se não houver fala transcrita, o aplicativo explica o motivo e não cria um TXT vazio. **Exportar SRT** continua disponível para legendas com tempos relativos ao corte.
 
