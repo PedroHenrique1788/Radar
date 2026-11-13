@@ -5,7 +5,7 @@ from PyInstaller.utils.hooks import collect_all
 root = Path(SPECPATH).parent
 binaries, datas, hiddenimports = [], [], ['packaging_smoke']
 for package in ('numpy', 'faster_whisper', 'ctranslate2', 'av', 'tokenizers',
-                'onnxruntime', 'huggingface_hub', 'opentimelineio'):
+                'onnxruntime', 'huggingface_hub', 'opentimelineio','psutil'):
     data, binary, hidden = collect_all(package)
     datas += data
     binaries += binary

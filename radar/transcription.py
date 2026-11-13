@@ -1,20 +1,41 @@
 import os
 import wave
+import tempfile
 from pathlib import Path
 from .media import check_cancel, Cancelled
 from .runtime import resolve_model
 
 
-def transcribe(path, model_name='tiny', cancel=None, progress=lambda *a: None, model_factory=None):
+def transcribe(path, model_name='tiny', cancel=None, progress=lambda *a: None, model_factory=None,*,threads=None,checkpoint=None):
     """Five-minute WAV chunks bound faster-whisper's decoded audio memory."""
+    check_cancel(cancel)
+    progress(None,'Carregando Whisper local em CPU/int8…')
     if model_factory is None:
         from faster_whisper import WhisperModel
         model_factory = WhisperModel
-    model = model_factory(resolve_model(model_name), device='cpu', compute_type='int8', cpu_threads=min(4, os.cpu_count() or 2))
+    model = model_factory(resolve_model(model_name), device='cpu', compute_type='int8', cpu_threads=threads or min(4, os.cpu_count() or 2))
     segments = []
-    chunk_path = Path(path).with_name('speech-chunk.wav')
+    def decode(file,offset):
+        result=[]
+        iterator,info=model.transcribe(str(file),language='pt',word_timestamps=True,vad_filter=True,
+                                       beam_size=1,condition_on_previous_text=False)
+        for seg in iterator:
+            check_cancel(cancel)
+            if seg.no_speech_prob>.8:continue
+            result.append({'start':offset+seg.start,'end':offset+seg.end,'text':seg.text.strip(),'words':[
+                {'start':offset+w.start,'end':offset+w.end,'word':w.word} for w in (seg.words or [])]})
+        return result
     try:
-        with wave.open(str(path), 'rb') as source:
+        if isinstance(path,(list,tuple)):
+            for n,item in enumerate(path):
+                check_cancel(cancel)
+                current=decode(item['path'],item['start'])
+                if checkpoint:checkpoint(item['index'],current)
+                segments.extend(current)
+                progress(100*(n+1)/max(1,len(path)),f'Transcrição: {n+1}/{len(path)} lotes pendentes')
+            return segments
+        with tempfile.TemporaryDirectory(prefix='radar-speech-') as tmp, wave.open(str(path),'rb') as source:
+            chunk_path=Path(tmp)/'speech-chunk.wav'
             rate, total = source.getframerate(), source.getnframes()
             offset = 0
             while offset < total:
@@ -25,18 +46,9 @@ def transcribe(path, model_name='tiny', cancel=None, progress=lambda *a: None, m
                 with wave.open(str(chunk_path), 'wb') as out:
                     out.setparams(source.getparams())
                     out.writeframes(raw)
-                iterator, info = model.transcribe(str(chunk_path), language='pt', word_timestamps=True,
-                                                 vad_filter=True, beam_size=1, condition_on_previous_text=False)
-                for seg in iterator:
-                    check_cancel(cancel)
-                    if seg.no_speech_prob > .8:
-                        continue
-                    segments.append({'start': offset / rate + seg.start, 'end': offset / rate + seg.end,
-                                     'text': seg.text.strip(), 'words': [
-                                         {'start': offset / rate + w.start, 'end': offset / rate + w.end, 'word': w.word}
-                                         for w in (seg.words or [])]})
+                segments.extend(decode(chunk_path,offset/rate))
                 offset += len(raw) // 2
-                progress(60 + 25 * offset / max(total, 1), 'Transcrevendo em CPU (português)…')
+                progress(100 * offset / max(total, 1), 'Transcrevendo em CPU (português)…')
     finally:
-        chunk_path.unlink(missing_ok=True)
+        del model
     return segments

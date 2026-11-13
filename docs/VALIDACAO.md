@@ -1,5 +1,17 @@
 # Validação — 7 de novembro de 2026
 
+## Evolução 2.0, Fase 1 — 0.4.0
+
+A auditoria partiu do commit `7764a97`, sem alterações pendentes. A suíte prévia passou com **84 testes em 23,81 s**. O novo motor preserva a API principal e usa checkpoints JSON por etapa/lote, perfil CPU, controle por `psutil` e a navegação Tkinter existente. O guia atual está em [FASE1.md](FASE1.md); as seções posteriores deste documento são registros históricos das entregas anteriores.
+
+Na validação local final da Fase 1, **107 testes passaram em 41,72 s** com Python 3.12, Xvfb `:114`, FFmpeg e FilmCraft oficial real. Essa execução inclui regressões, pausa de subprocesso sem bloquear a UI, cancelamento/retomada em nova tarefa, falha por lote e continuação sem módulo, reabertura de análise no desktop, integridade do cache, invalidação do original, cache independente da transcrição e pesos, limites de memória/processos, fila MP4 com retomada e preservação de arquivo editado, pesos normalizados, rejeição de atividade constante como destaque e fala atualizada no relatório após ajuste manual dos limites.
+
+A CLI foi executada de ponta a ponta duas vezes sobre mídia sintética: a primeira analisou/exportou; a segunda reutilizou checkpoints e verificou o clipe sem recodificá-lo, preservando o relatório anterior e criando `report_2.json`. O teste auxiliar do pacote para Gemini também passou localmente com transporte controlado, confirmando início local sem API e manutenção da revisão opcional.
+
+Um vídeo sintético de **30 minutos**, 32×18 a 0,25 fps, valida lotes e timestamps de uma transição conhecida aos 15 minutos. Ele não representa custo de decodificação de uma gameplay 1080p/4K nem prova desempenho no i7-8565U/MX110. A amostra Windows de português e as integrações nativas continuam no workflow, que deve passar antes de liberar o instalador 0.4.0. Gemini é testado com respostas controladas; não há chave pessoal ou validação da cota real.
+
+Capturas da Fase 1 usam a aplicação real em Linux/Tk 8.6, vídeo sintético e análise local sem API, com métricas do ambiente de teste. Essas capturas não são medições do computador do usuário.
+
 ## Registro inicial, antes do instalador Windows
 
 Ambiente atual: Linux x86_64, Python 3.12.14, FFmpeg/FFprobe 7.1.5, Tk 9.0, NumPy 2.2.6, faster-whisper 1.2.1, OpenTimelineIO 0.18.1, FilmCraft CLI oficial 0.18.0. Testes GUI em Xvfb 1280×900; sem GPU necessária para análise e exportação.

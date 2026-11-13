@@ -184,14 +184,32 @@ def build_video(app,parent):
     app.next_analysis=button(row,'Continuar para análise →',lambda:app.show_page('analysis'),True)
     box=card(parent,'Um fluxo simples')
     description(box,'1. Selecione o vídeo   →   2. Analise   →   3. Revise os cortes   →   4. Exporte\n\nOs horários sempre se referem ao vídeo original. Você decide os limites e o que vai publicar.')
+    box=card(parent,'Análises recentes e retomada')
+    app.jobs_table=ttk.Treeview(box,columns=('source','status','stage'),show='headings',height=3)
+    for key,label in [('source','Gameplay'),('status','Estado'),('stage','Última etapa')]:
+        app.jobs_table.heading(key,text=label);app.jobs_table.column(key,width=180,minwidth=80)
+    app.jobs_table.pack(fill='x',pady=(0,8))
+    row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
+    app._run_buttons.append(button(row,'Abrir análise selecionada',app.open_recent_analysis))
+    description(box,'O original e as configurações são conferidos antes de reutilizar os lotes. Arquivos de cache antigos são preservados.')
 
 
 def build_analysis(app,parent):
-    box=card(parent,'Radar + Gemini no mesmo fluxo')
+    box=card(parent,'Motor local em CPU • Gemini opcional')
     ttk.Label(box,textvariable=app.workflow_status,style='CardMuted.TLabel',wraplength=650).pack(anchor='w',fill='x',pady=(0,8))
-    description(box,'O Radar prepara até 20 candidatos; o Gemini compara as falas e escolhe a quantidade solicitada. Os horários originais são preservados. A lista de modelos não confirma cota gratuita disponível.')
+    description(box,'Áudio e imagem funcionam sem API ou modelo generativo. Whisper pode acrescentar fala local; Gemini pode revisar os candidatos quando ativado por você.')
     row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
-    button(row,'Configurar Gemini / conferir cota',lambda:app.show_page('settings'))
+    button(row,'Somente Radar (sem API)',app.use_radar_only)
+    button(row,'Configurações e Gemini',lambda:app.show_page('settings'))
+    box=card(parent,'Execução e checkpoints')
+    ttk.Label(box,textvariable=app.execution_info,style='CardMuted.TLabel',wraplength=680,justify='left').pack(anchor='w',fill='x',pady=(0,10))
+    ttk.Label(box,textvariable=app.resume_info,style='CardMuted.TLabel',wraplength=680,justify='left').pack(anchor='w',fill='x',pady=(0,8))
+    row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
+    app._run_buttons.append(button(row,'Analisar vídeo',app.analyze,True))
+    app.pause_button=button(row,'Pausar',app.toggle_pause)
+    app.pause_button.configure(textvariable=app.pause_text)
+    app.resume_analysis_button=button(row,'Retomar análise',app.resume_analysis)
+    description(box,'Percentuais são da etapa atual, calculados por segundos, amostras, lotes ou candidatos concluídos. A estimativa de tempo só aparece com dados suficientes. Pausas são confirmadas nos limites das unidades de trabalho.')
     box=card(parent,'Áudio e transcrição')
     description(box,'Em gravações do OBS, escolha o microfone para analisar as falas ou use o mix completo.')
     ttk.Label(box,text='Faixa de áudio',style='Card.TLabel').pack(anchor='w')
@@ -199,7 +217,7 @@ def build_analysis(app,parent):
     app.track.pack(fill='x',pady=(5,12))
     ttk.Label(box,text='Modelo de fala',style='Card.TLabel').pack(anchor='w')
     app.model=ttk.Combobox(box,values=['tiny','base','small','off'],state='readonly',width=18)
-    app.model.set('tiny');app.model.pack(anchor='w',pady=(5,10))
+    app.model.set(app.whisper_default);app.model.pack(anchor='w',pady=(5,10))
     description(box,'tiny: leve e incluído no instalador. base/small: mais lentos e podem exigir download. off: somente sinais de áudio e imagem.')
     box=card(parent,'Como você quer os cortes?')
     for label,var in [('Sugestões (1 a 20)',app.count),('Duração mínima (segundos)',app.minimum),('Duração máxima (segundos)',app.maximum)]:
@@ -274,9 +292,10 @@ def build_review(app,parent):
 
 def build_export(app,parent):
     box=card(parent,'Vídeos e relatórios')
-    description(box,'Use a seleção da tela de revisão. MP4 exporta o primeiro corte selecionado; o relatório reúne todos os resultados.')
+    description(box,'MP4 individual usa o primeiro selecionado. A fila exporta a seleção, verifica os clipes prontos e permite retomar na mesma pasta. O relatório reúne todos os resultados.')
     row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
     app._cut_buttons.append(button(row,'Exportar corte MP4',app.export_video,True))
+    app._cut_buttons.append(button(row,'Selecionados em fila',app.export_batch))
     app._cut_buttons.append(button(row,'Relatório JSON / CSV',app.report))
     box=card(parent,'Falas, legendas e revisão')
     row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
@@ -300,7 +319,28 @@ def build_export(app,parent):
 
 
 def build_settings(app,parent):
-    box=card(parent,'1. Configure o Gemini antes de começar')
+    box=card(parent,'Desempenho em CPU')
+    ttk.Label(box,textvariable=app.option_vars['profile'],style='Section.TLabel',wraplength=650).pack(anchor='w',pady=(0,10))
+    description(box,'O modo econômico usa etapas sequenciais e lotes limitados. A MX110 não é necessária. O limite de RAM é uma proteção verificada durante o trabalho; não é uma reserva feita no Windows.')
+    rows=[('Threads de CPU','threads'),('Máximo de processos da tarefa (1 ou 2)','max_processes'),
+          ('Limite de RAM aproximada (MB)','memory_mb'),('Amostras visuais por segundo (0.25 / 0.5 / 1 / 2)','sample_fps'),
+          ('Largura da análise visual (64 / 128 / 192)','visual_width'),('Lote em segundos (16–300, múltiplo de 4)','batch_seconds'),
+          ('Contexto anterior ao evento (segundos)','before'),('Contexto posterior (segundos)','after')]
+    for text,key in rows:
+        row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x',pady=3)
+        ttk.Label(row,text=text,style='Card.TLabel',width=49).pack(side='left')
+        ttk.Entry(row,textvariable=app.option_vars[key],width=10).pack(side='left')
+    for key,text in [('audio','Analisar áudio'),('visual','Analisar imagem por amostragem')]:
+        ttk.Checkbutton(box,text=text,variable=app.option_vars[key]).pack(anchor='w')
+    description(box,'Pesos relativos: sinais ausentes não entram na soma e os demais pesos são normalizados. Áudio alto constante não é tratado automaticamente como destaque ou reação do criador.')
+    for key,label in [('gancho_fala','Gancho na fala'),('variação_sonora','Variação sonora'),('atividade_visual','Atividade visual'),('fala_completa','Contexto de fala')]:
+        row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x',pady=3)
+        ttk.Label(row,text=label,style='Card.TLabel',width=32).pack(side='left')
+        ttk.Entry(row,textvariable=app.weight_vars[key],width=10).pack(side='left')
+    row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x',pady=(8,0))
+    app._config_buttons.append(button(row,'Aplicar Modo Econômico — Lenovo MX110',app.economy_profile))
+    app._config_buttons.append(button(row,'Salvar desempenho',app.save_analysis_options,True))
+    box=card(parent,'Gemini • revisão adicional opcional')
     description(box,'Após cada análise local, o Gemini revisa automaticamente as falas dos candidatos e ordena os melhores cortes. Só texto, horários e critérios dos candidatos são enviados ao Google; o vídeo fica no computador.')
     ttk.Label(box,textvariable=app.workflow_status,style='CardMuted.TLabel',wraplength=650).pack(anchor='w',fill='x',pady=(0,8))
     ttk.Label(box,textvariable=app.gemini_status,style='Card.TLabel',wraplength=650).pack(anchor='w',pady=(0,10))
@@ -322,6 +362,7 @@ def build_settings(app,parent):
     description(box,'Validar a chave não consulta saldo nem garante gratuidade. Confira cota e faturamento no AI Studio. O Radar não impede cobranças de um projeto com faturamento ativo. Pesquisa pode ter limites/custos próprios; não há troca de modelo nem novas tentativas automáticas após erro.')
     row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
     app._config_buttons.append(button(row,'Usar Radar + Gemini',app.enable_gemini,True))
+    app._config_buttons.append(button(row,'Somente Radar',app.use_radar_only))
     app._config_buttons.append(button(row,'Salvar preferências',app.save_gemini_preferences))
     row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
     button(row,'Criar / gerenciar chave',app.open_ai_studio)
@@ -352,4 +393,23 @@ def gemini_failure(app,title,text):
         ttk.Button(frame,text=label,command=command).pack(fill='x',pady=3)
     dialog.protocol('WM_DELETE_WINDOW',app.wait_for_gemini)
     dialog.grab_set()
+    return dialog
+
+
+def analysis_failure(app,error):
+    from .checkpoints import STAGES
+    dialog=tk.Toplevel(app)
+    dialog.title('Análise interrompida • checkpoints preservados')
+    dialog.geometry(f'760x{min(500,app.winfo_screenheight()-100)}')
+    dialog.transient(app)
+    frame=ttk.Frame(dialog,padding=18);frame.pack(fill='both',expand=True)
+    ttk.Label(frame,text=STAGES.get(error.stage,error.stage),style='Title.TLabel',wraplength=700).pack(anchor='w',pady=(0,10))
+    box=text_panel(app,frame,7)
+    app._set_text(box,str(error))
+    row=ttk.Frame(frame);row.pack(fill='x',pady=(12,0))
+    button(row,'Retomar análise',app.resume_analysis,True)
+    if error.stage in ('extract','audio','visual'):
+        button(row,'Continuar sem este módulo',lambda:app.skip_failed_module(error.stage))
+    button(row,'Fechar',app._dismiss_analysis_error)
+    dialog.protocol('WM_DELETE_WINDOW',app._dismiss_analysis_error)
     return dialog

@@ -4,8 +4,15 @@ import os
 import re
 from pathlib import Path
 import tempfile
-from .media import executable, run, check_cancel, probe
+from .media import executable, run, check_cancel, probe,Cancelled
 from .model import timestamp
+from .checkpoints import CheckpointStore,StageError,signature,source_identity
+from .control import ExecutionControl,current_control
+
+
+def verify_source(media):
+    if media.source_id and signature(source_identity(media.path))!=media.source_id:
+        raise ValueError('O arquivo original mudou desde a análise. Analise novamente antes de exportar estes limites.')
 
 
 def safe_destination(path, source=None, overwrite=False):
@@ -18,7 +25,8 @@ def safe_destination(path, source=None, overwrite=False):
     return path
 
 
-def export_clip(media, cut, path, cancel=None, overwrite=False):
+def export_clip(media, cut, path, cancel=None, overwrite=False,progress=None):
+    verify_source(media)
     cut.validate(media.duration)
     path = safe_destination(path, media.path, overwrite)
     absolute_start, absolute_end = media.origin + cut.start, media.origin + cut.end
@@ -43,7 +51,7 @@ def export_clip(media, cut, path, cancel=None, overwrite=False):
     os.close(fd)
     Path(tmp).unlink()
     try:
-        run(args + [tmp], cancel)
+        run(args + [tmp],cancel,progress=progress,duration=cut.duration)
         try:
             probe(tmp)
         except (ValueError, RuntimeError) as exc:
@@ -83,21 +91,87 @@ def publish_file(temporary, destination, cancel=None, overwrite=False):
             Path(destination).unlink(missing_ok=True)
         raise
 
-def export_report(media, cuts, path):
+def export_report(media, cuts, path,speech=None):
+    verify_source(media)
+    cuts=list(cuts)
     path = safe_destination(path, media.path)
     records = [c.record(media) for c in cuts]
+    if speech is not None:
+        for cut,record in zip(cuts,records):record['transcript']=' '.join(entry['text'] for entry in transcript_entries(cut,speech)[0])
     with path.open('x', encoding='utf-8-sig' if path.suffix.lower() == '.csv' else 'utf-8', newline='') as f:
         if path.suffix.lower() == '.csv':
-            fields = ['id', 'title', 'start_time', 'end_time', 'duration', 'score', 'category', 'reason', 'transcript', 'editing']
+            fields = ['id', 'title', 'start_time', 'end_time', 'duration', 'score', 'category', 'reason', 'transcript', 'editing','source_id','source']
             writer = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
             writer.writeheader()
             # Prevent spreadsheet formulas when transcript/title start with = + - @.
             for record in records:
                 writer.writerow({k: ("'" + v if isinstance(v, str) and v.lstrip().startswith(('=', '+', '-', '@')) else v) for k, v in record.items()})
         else:
-            json.dump({'source': media.path, 'time_reference': 'seconds from first original video frame',
+            json.dump({'source': media.path,'source_id':media.source_id, 'time_reference': 'seconds from first original video frame',
                        'notice': 'Pontuação heurística; não é probabilidade de viralização.', 'cuts': records}, f, ensure_ascii=False, indent=2)
     return path
+
+
+def _file_hash(path,cancel):
+    import hashlib
+    digest=hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        while True:
+            check_cancel(cancel)
+            data=stream.read(1024*1024)
+            if not data:break
+            digest.update(data)
+    return digest.hexdigest()
+
+
+def export_clips(media,cuts,folder,cancel=None,cache_dir='temporarios',progress=lambda *a:None,options=None):
+    """Sequential MP4 queue; resume only verified, committed files, never clobber."""
+    verify_source(media)
+    cuts=list(cuts)
+    if not cuts:raise ValueError('Selecione pelo menos um corte para a fila.')
+    for cut in cuts:cut.validate(media.duration)
+    folder=Path(folder).resolve();folder.mkdir(parents=True,exist_ok=True)
+    control=cancel if isinstance(cancel,ExecutionControl) else ExecutionControl(options,cancel)
+    store=CheckpointStore(media.path,cache_dir);store.acquire()
+    key=signature(['mp4-queue-v1',store.source_id,str(folder),[(c.id,c.start,c.end) for c in cuts]])
+    total=sum(c.duration for c in cuts);done=0.;outputs=[]
+    stem=re.sub(r'[^\w.-]+','_',Path(media.path).stem)[:40] or 'gameplay'
+    try:
+        with control.bind():
+            store.start('export',key,len(cuts))
+            store.manifest['export_request']={'directory':str(folder),'cuts':[c.record(media) for c in cuts]}
+            store.save_manifest()
+            for index,cut in enumerate(cuts):
+                check_cancel(control)
+                control.report('Exportação',done,total,'s',candidates=len(cuts))
+                row=store.load('export',key,index)
+                previous=Path(row['path']) if isinstance(row,dict) and isinstance(row.get('path'),str) else None
+                progress(None,f'Conferindo clipe {index+1}/{len(cuts)} e seu checkpoint…')
+                if previous is not None and previous.parent==folder and previous.is_file() and previous.stat().st_size==row.get('size') and _file_hash(previous,control)==row.get('sha256'):
+                    output=previous
+                else:
+                    base=f'{stem}_{store.source_id[:8]}_corte_{cut.id:03}_{round(cut.start*1000):09}_{round(cut.end*1000):09}'
+                    output=folder/(base+'.mp4');version=1
+                    while output.exists():
+                        version+=1;output=folder/f'{base}_v{version}.mp4'
+                    def encoded(seconds):
+                        control.report('Exportação',done+seconds,total,'s',candidates=len(cuts))
+                        progress(100*(done+seconds)/total,f'Exportando clipe {index+1}/{len(cuts)}…')
+                    export_clip(media,cut,output,control,progress=encoded)
+                    progress(None,f'Validando integridade do clipe {index+1}/{len(cuts)}…')
+                    store.save('export',key,{'path':str(output),'size':output.stat().st_size,'sha256':_file_hash(output,control)},index)
+                outputs.append(output);done+=cut.duration
+                store.mark('export',index+1,len(cuts),'complete' if index+1==len(cuts) else 'running')
+                control.report('Exportação',done,total,'s',candidates=len(cuts))
+                progress(100*done/total,f'{index+1}/{len(cuts)} clipes concluídos e verificados')
+            store.manifest['status']='complete';store.save_manifest()
+            return outputs
+    except (KeyboardInterrupt,Cancelled):
+        store.interrupted('cancelled');raise
+    except Exception as exc:
+        store.interrupted('failed',exc)
+        raise StageError('export',str(exc),store.folder) from exc
+    finally:store.release()
 
 
 def export_srt(cut, speech, path):

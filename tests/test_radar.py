@@ -123,11 +123,14 @@ def test_silence_and_static_not_forced(movie):
 
 def test_transcription_failure_fallback(movie,tmp_path,monkeypatch):
     import radar.pipeline as p
-    def fail(*args): raise RuntimeError('model failed')
+    def fail(*args,**kwargs): raise RuntimeError('model failed')
     monkeypatch.setattr(p,'transcribe',fail)
     m,cuts,speech,warnings=p.analyze(movie,track=1,model='tiny',minimum=8,maximum=16,cache_dir=tmp_path)
     assert not speech and cuts and 'Transcrição indisponível' in warnings[0]
-    assert not list(tmp_path.glob('*.json')) # do not cache failure as success
+    from radar.checkpoints import latest_request
+    state=latest_request(movie,tmp_path)
+    assert state['stages']['transcription']['status']=='failed'
+    assert state['stages']['visual']['status']=='complete' and state['stages']['audio']['status']=='complete'
     assert not list(tmp_path.glob('radar-*'))
 
 

@@ -28,6 +28,12 @@ def smoke():
         run([tools['ffmpeg'], '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=160x90:r=25:d=3',
              '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3', '-c:v', 'libx264', '-c:a', 'aac', video])
         media, cuts, speech, warnings = analyze(video, minimum=1, maximum=2, model='off', cache_dir=tmp/'cache')
+        with patch('radar.pipeline.extract_audio',side_effect=AssertionError('Extração repetida após checkpoint')),\
+             patch('radar.pipeline.sound_features',side_effect=AssertionError('Áudio repetido após checkpoint')),\
+             patch('radar.pipeline.visual_features',side_effect=AssertionError('Imagem repetida após checkpoint')):
+            resumed=analyze(video,minimum=1,maximum=2,model='off',cache_dir=tmp/'cache')
+        assert [(c.start,c.end) for c in resumed[1]]==[(c.start,c.end) for c in cuts]
+        assert media.source_id and resumed[0].source_id==media.source_id
         output = export_clip(media, Cut(1,.4,2.4,50,'Teste','Teste'), tmp/'corte.mp4')
         assert abs(probe(output).duration - 2) < .05
         with patch('radar.export.os.link', side_effect=OSError(errno.ENOTSUP,'Hard links not supported')):
@@ -62,7 +68,8 @@ def smoke():
         gemini_result=gemini_offline_smoke(tmp)
     return {'tools': tools, 'gui': True, 'media_export': True, 'whisper_int8': True,
             'silence_vad': True, 'portuguese_transcript': text, 'otio': True,
-            'portable_export':True, 'transcript_txt':True, 'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
+            'portable_export':True, 'transcript_txt':True,'checkpoint_resume':True,'local_cpu_without_api':True,
+            'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
 
 
 def filmcraft_roundtrip(media, folder):
@@ -173,7 +180,7 @@ def gemini_offline_smoke(folder):
         protected=True
     automatic_gemini_smoke(folder,lambda credential:GeminiClient(credential,Response()),key)
     return {'request_response':True,'local_times_preserved':True,'windows_dpapi':protected,
-            'setup_required':True,'automatic_selection':True}
+            'local_without_api':True,'gemini_validation_required':True,'automatic_selection':True}
 
 
 def automatic_gemini_smoke(folder,client_factory,key):
@@ -188,7 +195,7 @@ def automatic_gemini_smoke(folder,client_factory,key):
         os.chdir(profile)
         with patch('radar.gui.GeminiClient',client_factory),patch('radar.gui.messagebox.askyesno',return_value=True):
             app=gui.App()
-            assert app.current_page=='settings' and app.workflow_mode=='setup'
+            assert app.current_page=='video' and app.workflow_mode=='radar' and app.model.get()=='off'
             def finish():
                 deadline=time.monotonic()+15
                 while app.busy and time.monotonic()<deadline:

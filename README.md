@@ -1,8 +1,8 @@
-# Radar de Cortes — CefasGamer
+# Cefas Radar de Cortes 2.0
 
 Aplicativo desktop em português para revisar gravações longas de gameplay e localizar intervalos aproveitáveis. Processa localmente em CPU, oferece faixas OBS, análise sonora/visual, transcrição opcional, pontuação explicável, revisão manual e exportação. Não prevê viralização nem reconhece semanticamente acontecimentos de jogos.
 
-**Versão 0.3.0:** a interface pede a configuração inicial do Gemini e passa a comparar as falas automaticamente após a análise local. A versão 0.2.0 anterior usa revisão manual pelo botão.
+**Fase 1 — versão 0.4.0:** motor local em CPU, sem chave/API obrigatória, checkpoints por etapa/lote, pausa/retomada, métricas reais por etapa, pesos configuráveis e fila MP4 recuperável. Whisper e Gemini são opcionais. Veja a [auditoria](docs/AUDITORIA_2_0.md) e o [guia da Fase 1, comandos e limitações](docs/FASE1.md).
 
 ## Instalação com assistente (recomendada)
 
@@ -23,30 +23,30 @@ As dependências de build estão em `packaging/requirements-build.txt`, entradas
 1. Instale **Python 3.12 de 64 bits** (3.11 também aceito) pelo [python.org](https://www.python.org/downloads/windows/). Inclua **Tcl/Tk**, pip e Python Launcher. Não use o Python embutido de outro aplicativo.
 2. Instale FFmpeg a partir dos links de builds Windows da [página oficial](https://ffmpeg.org/download.html). Extraia e adicione a pasta `bin` ao `PATH`; abra um novo terminal e confirme `ffmpeg -version`, `ffprobe -version` e `ffplay -version`. Se preferir, configure `FFMPEG_PATH`, `FFPROBE_PATH` e `FFPLAY_PATH` com os caminhos completos dos executáveis.
 3. Extraia/clone este projeto e dê duplo clique em **instalar.bat**. O instalador cria `.venv` e instala dependências gratuitas. Não exige CUDA ou uma chave de API.
-4. Abra **iniciar.bat** e configure a chave/modelo Gemini conforme as instruções abaixo. O primeiro uso de um modelo de fala baixa seus pesos do Hugging Face; depois os arquivos ficam em cache. Esse download precisa de Internet. **off** só é aceito no modo somente Radar, pois a revisão do Gemini precisa de transcrição.
+4. Abra **iniciar.bat** e selecione uma gameplay. O padrão **off** analisa áudio/imagem sem modelo ou API. Se ativar Whisper pelo código-fonte, seus pesos podem precisar de download; no instalador tiny já acompanha o pacote. A revisão Gemini é adicional e exige ativação explícita nas preferências.
 
 Use `tiny` no i7-8565U com MX110; `base` ou `small` consomem mais tempo e memória. A MX110 não é exigida. O FFmpeg precisa de libx264 e codificador AAC, presentes nos builds usuais.
 
 ## Usar
 
-1. Na primeira tela, informe sua chave Gemini, clique em **Validar e listar modelos**, escolha o modelo e clique em **Usar Radar + Gemini**. Autorize a revisão automática desta sessão após conferir sua cota no Google. Depois, **Selecionar vídeo** (MP4, MKV, MOV ou AVI).
+1. **Selecionar vídeo** (MP4, MKV, MOV ou AVI). Nenhuma chave é necessária. O perfil **Modo Econômico — Lenovo MX110** usa CPU, processamento sequencial, duas threads, limite de memória e amostragem reduzida.
 2. Escolha o microfone OBS para transcrição/análise sonora ou **Áudio completo (mix)**. A escolha afeta a análise; os MP4 exportados preservam todas as faixas de áudio.
-3. Configure quantidade (1–20, padrão 10) e duração (padrão 15–60 s). Clique em **Analisar vídeo**. O Radar prepara até o dobro da quantidade pedida, limitado a 20 candidatos. O Gemini compara as transcrições e escolhe a quantidade final pela nota editorial. Não é necessário clicar em outro botão para essa revisão. A interface continua responsiva; **Cancelar** preserva os resultados locais já concluídos.
+3. Configure quantidade (1–20) e duração e clique em **Analisar vídeo**. Acompanhe etapa, unidades processadas, CPU/RAM e tempo. **Pausar/Retomar** mantém a unidade atual; **Cancelar** conserva etapas/lotes confirmados. **Retomar análise** e **Análises recentes** permitem continuar depois, revalidando original/configurações. Se ativado em Preferências, Gemini compara até 20 candidatos automaticamente após a análise local.
 4. Em **Revisar cortes**, clique em um resultado para ler a justificativa, os componentes da pontuação e a transcrição. A aba **Gemini** mostra a avaliação das falas; a tabela usa o título sugerido pela IA sem substituir o título local no objeto do corte. **Por potencial** prioriza notas Gemini válidas e usa o score local nos cortes sem revisão. **Por tempo** ordena cronologicamente. Ctrl permite selecionar vários cortes.
 5. **Reproduzir** cria uma prévia temporária recodificada e abre FFplay. Os campos **Início no original** e **Fim no original** aceitam `HH:MM:SS.mmm`; clique em **Aplicar limites** para alinhar aos quadros originais. O score permanece o da análise anterior após ajustes manuais.
 6. **Copiar tempos**, exportar **JSON/CSV**, **SRT** ou **MP4**. O vídeo original é sempre protegido. Um MP4 existente só é substituído após confirmação e após concluir a nova exportação; relatórios e legendas usam destinos novos. Os MP4 mantêm resolução, proporção e faixas de áudio; não há conversão automática para 9:16.
 
-A pontuação soma gancho lexical (até 30), variação sonora (25), atividade visual (20) e quantidade de fala completa disponível (25). Alto ≥70, médio ≥45, baixo <45. “Fala completa” é uma aproximação lexical, não uma avaliação semântica de começo/meio/fim. Sons constantes ou silêncio não geram sugestões por si só; volume sem fala/atividade visual não basta. O sistema pode retornar menos de 5 sugestões ou nenhuma. Revise ganchos, contexto, emoção e desfecho; os títulos são trechos literais da fala ou descrições neutras de atividade.
+A pontuação combina gancho lexical, variação sonora relativa, atividade visual e contexto lexical. Os pesos são configuráveis e normalizados conforme os sinais disponíveis; os motivos mostram pontos e pesos efetivos. Alto ≥70, médio ≥45, baixo <45. Volume constante e silêncio não são forçados a gerar destaques. A nota representa relevância interna, sem confirmar emoção, acontecimentos do jogo ou viralização. Podem existir menos sugestões do que o solicitado ou nenhuma.
 
 ## Tempos, memória e precisão
 
-Todos os tempos usam o **primeiro quadro do vídeo original como zero**, sem perder posição após blocos de transcrição. HH:MM:SS.mmm é uma representação de segundos, não timecode SMPTE. O leitor considera PTS inicial e atraso das faixas. A transcrição usa WAV mono 16 kHz em disco e blocos de cinco minutos (os limites desses blocos ainda podem prejudicar frases). Cada bloco recebe novamente seu deslocamento original. Amostragem visual: 1 quadro/s em 64×36; mede diferenças entre imagens, sem fingir reconhecer ações. Essa alternativa ao PySceneDetect reduz dependências e não produz uma lista exaustiva de cenas.
+Todos os tempos usam o **primeiro quadro do vídeo original como zero**. HH:MM:SS.mmm é uma representação de segundos, não timecode SMPTE. PTS inicial e atraso das faixas são preservados. WAVs mono 16 kHz são limitados por lote de até cinco minutos; a transcrição recebe o deslocamento original de cada lote. Os limites dos lotes ainda podem prejudicar frases. Amostragem visual padrão: 0,5 quadro/s em 64×36, configurável; mede diferenças sem reconhecer semanticamente ações. Não é uma lista exaustiva de cenas.
 
-A análise percorre o arquivo inteiro. Mantém features por segundo e transcrição em memória, não todos os quadros nem o áudio completo. O uso cresce com a duração; não existe garantia de duração ilimitada. WAV temporário mono usa aproximadamente 115 MB/h; a integração com editor gera aproximadamente **691 MB/h por faixa** estéreo PCM 48 kHz. Garanta espaço em disco. Não há benchmark em gravações reais de muitas horas neste ambiente.
+A análise percorre o arquivo inteiro, em lotes, mantendo sinais compactos e fala em memória. O uso ainda cresce com a duração; não há garantia de duração ilimitada. WAV mono em cache usa aproximadamente 115 MB/h; FilmCraft gera aproximadamente **691 MB/h por faixa** estéreo PCM 48 kHz. Garanta espaço e consulte o [guia da Fase 1](docs/FASE1.md) antes de apagar cache referenciado por projetos. Não há benchmark em gravações reais de muitas horas neste ambiente.
 
 Os limites sugeridos são alinhados aos PTS de quadros próximos usando FFprobe. Em VFR, índices de quadro no JSON são **nominais**, não índices reais; utilize os tempos. A detecção de VFR por taxas médias é apenas indicativa. Transcrição e amostragem visual não garantem a fronteira perfeita de uma frase: revise cada corte. A exportação FFmpeg recodifica por timestamps em vez de copiar por keyframes; a precisão final é limitada pelos quadros/amostras existentes. Em arquivos com origem temporal zero, a exportação busca perto do intervalo para evitar decodificar horas anteriores. Arquivos com offsets usam o caminho conservador para preservar sincronismo. A publicação do MP4 funciona também sem hard links (exFAT/FAT32/compartilhamentos); FAT32 continua limitado a arquivos de 4 GB. Imagens com dimensões ímpares recebem até 1 pixel de borda para compatibilidade H.264.
 
-Features e transcrições bem-sucedidas são reutilizadas em `temporarios/`, identificadas por caminho, tamanho, data do vídeo e parâmetros. A análise sem transcrição também fica em cache. Falhas de fala não são armazenadas como sucesso. Alterar o arquivo sem mudar tamanho/data não invalida o cache: apague o cache manualmente nesse caso. Logs em `temporarios/radar.log`. Não execute duas instâncias simultaneamente usando a mesma pasta de cache.
+Os checkpoints ficam em `temporarios/jobs/<source_id>/`, por etapa/lote, com integridade e escrita atômica. O ID inclui caminho, tamanho, mtime e amostras do início/fim; não é hash integral do vídeo. Configurações, ferramentas e modelo invalidam apenas etapas relevantes. Falhas não apagam resultados anteriores. Bloqueios evitam escritores simultâneos do mesmo trabalho. Veja os limites de validação e armazenamento no [guia da Fase 1](docs/FASE1.md). Logs em `temporarios/radar.log`.
 
 ## FilmCraft
 
@@ -114,18 +114,20 @@ Após analisar com `tiny`, `base` ou `small`, selecione um corte e clique em **T
 
 Quando há tempos por palavra, os termos fora do corte são excluídos. Palavras parcialmente ouvidas nas bordas são sinalizadas para revisão. Se faltarem tempos por palavra, segmentos que atravessam os limites são omitidos com observação, evitando incluir frases externas como se pertencessem ao corte. Se não houver fala transcrita, o aplicativo explica o motivo e não cria um TXT vazio. **Exportar SRT** continua disponível para legendas com tempos relativos ao corte.
 
-## Interface CefasGamer e fluxo automático Gemini — 0.3.0
+## Interface CefasGamer e Gemini opcional
 
 A navegação agora segue quatro etapas: **Selecionar vídeo → Analisar → Revisar cortes → Exportar**. O azul foi indicado pelo proprietário do canal. Em **Preferências**, é possível ajustar nome/cor e carregar seu logotipo PNG. O monograma CG é apenas o padrão do aplicativo; não é uma cópia do logotipo do canal. O layout mantém as ações avançadas fora da tela principal. A imagem na prévia é um quadro de referência; **Reproduzir** abre o trecho com áudio no player FFplay.
 
-![Interface real em desenvolvimento, com vídeo sintético e revisão Gemini simulada, sem chamada à API](docs/interface-azul.png)
+![Fase 1: interface real em Linux com análise local de vídeo sintético, sem API; métricas do ambiente de teste](docs/fase1-analise.png)
+
+[Ver a revisão dos cortes locais](docs/fase1-revisao.png). As capturas não medem desempenho no computador do usuário.
 
 ### Configurar sua própria chave Gemini
 
 1. Em **Preferências → Gemini**, cole uma chave nova do Google AI Studio no campo protegido visualmente. Uma chave compartilhada em conversa deve ser revogada/substituída. Nenhuma chave pessoal acompanha este repositório ou o instalador.
 2. **Guardar chave** mantém a chave apenas na sessão. Se marcar **Salvar protegida para este usuário do Windows**, ela será cifrada com Windows DPAPI, no escopo do usuário atual, em `%LOCALAPPDATA%\RadarCortes\config\gemini_key.dpapi`. Ela não entra no JSON comum de preferências. No Linux, use a chave na sessão ou `GEMINI_API_KEY`; não há gravação de chave em texto puro. **Remover chave salva** apaga a cópia protegida e a chave da sessão; uma variável de ambiente configurada fora do app permanece sob controle do usuário.
 3. Clique em **Validar e listar modelos** e escolha um modelo da sua conta. A lista vem do Google, sem fixar um modelo que possa ser descontinuado. Isso verifica acesso à lista, sem consultar saldo, preços, cota restante ou garantir que `generateContent` estará liberado.
-4. Clique em **Usar Radar + Gemini** e autorize o envio automático das falas dos candidatos após cada análise desta sessão. A navegação do desktop é liberada depois dessa configuração. Mesmo com chave protegida salva, cada nova sessão pede validação/ativação. Alterar chave, modelo ou pesquisa exige nova configuração antes da próxima análise automática.
+4. Clique em **Usar Radar + Gemini** para autorizar a revisão automática desta sessão. Quando a transcrição estiver desligada, tiny é selecionado para fornecer as falas ao Gemini. A navegação e a análise local continuam disponíveis sem esta configuração. Mesmo com chave salva, Gemini exige validação/ativação por sessão; mudanças de chave/modelo/pesquisa exigem nova autorização para envio automático.
 5. Analise normalmente. O Radar prepara até 20 candidatos; o Gemini compara as falas e ordena os melhores. A seleção final pode diferir da preferência da heurística local. Somente horários, transcrição e critérios locais dos candidatos são enviados; caminho privado e vídeo ficam fora da requisição. Há uma solicitação de revisão por análise, sem trocas de modelo ou repetições automáticas após erro.
 6. Leia a aba **Gemini**. A nota editorial aparece separada da pontuação local. Limites, IDs e nota local não são alterados. Alterar limites/transcrição invalida a revisão daquela versão do corte. **Revisar seleção** permite uma nova avaliação manual. É possível salvar a revisão em JSON na etapa **Exportar**.
 

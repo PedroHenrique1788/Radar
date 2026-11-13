@@ -66,13 +66,14 @@ def main():
                     shutil.copy2(source, target)
     (licenses/'THIRD-PARTY.txt').write_text(
         'Includes Python, Tcl/Tk, NumPy, faster-whisper, CTranslate2, ONNX Runtime, PyAV, '
-        'OpenTimelineIO and their dependencies. See accompanying license files.\n'
+        'OpenTimelineIO, psutil and their dependencies. See accompanying license files.\n'
         'FFmpeg GPL build: https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/tag/latest\n'
         'Build recipes and source revisions: https://github.com/FFmpeg-Builds/FFmpeg-Builds\n'
         'FFmpeg source: https://git.ffmpeg.org/ffmpeg.git\n'
         'Whisper model weights (MIT): https://huggingface.co/Systran/faster-whisper-tiny/tree/' + MODEL_REVISION + '\n',
         encoding='utf-8')
-    (bundle/'manifest.json').write_text(json.dumps({'model_revision':MODEL_REVISION,'ffmpeg_sha256':digest},indent=2))
+    (bundle/'manifest.json').write_text(json.dumps({'model_revision':MODEL_REVISION,'ffmpeg_sha256':digest,
+        'python':sys.version,'packages':{dist.metadata['Name']:dist.version for dist in importlib.metadata.distributions()}},indent=2))
     print('Verified bundle inputs prepared:', bundle)
 
 

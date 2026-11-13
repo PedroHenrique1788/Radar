@@ -17,7 +17,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog, colorchooser
 from .media import probe, align_bounds, executable, Cancelled
 from .model import timestamp, parse_time
 from .pipeline import analyze
-from .export import export_report, export_clip, export_srt, export_transcript
+from .export import export_report, export_clip, export_srt, export_transcript,export_clips
 from .filmcraft import locate_cli, capabilities, create_projects, open_project, cli_from_selection
 from .settings import save_filmcraft, read_settings, save_settings
 from .runtime import start_process
@@ -26,16 +26,17 @@ from .credentials import KeyStore, validate_key
 from .gemini import GeminiClient, GeminiError, cut_record, record_signature
 from . import ui
 from .export import transcript_entries
+from .desktop_analysis import AnalysisDesktop
+from .profiles import AnalysisOptions
 
 
-class App(tk.Tk):
+class App(AnalysisDesktop,tk.Tk):
     def __init__(self):
         super().__init__()
         prefs=read_settings()
         self.title('Radar de Cortes — CefasGamer')
         self.geometry(f'{min(1320, self.winfo_screenwidth()-50)}x{min(850, self.winfo_screenheight()-90)}')
         self.events=queue.Queue()
-        self.cancel=threading.Event()
         self.busy=False
         self.media,self.cuts,self.speech,self.cli=None,[],[],None
         self.preview_processes=[]
@@ -45,7 +46,7 @@ class App(tk.Tk):
         logging.basicConfig(filename='temporarios/radar.log',level=logging.INFO)
         self.path=tk.StringVar()
         self.info=tk.StringVar(value='Nenhum vídeo selecionado.')
-        self.status=tk.StringVar(value='Configure sua chave Gemini, valide os modelos e ative Radar + Gemini para começar.')
+        self.status=tk.StringVar(value='Selecione uma gameplay. A análise local em CPU funciona sem chave ou API.')
         self.count,self.minimum,self.maximum=tk.StringVar(value='10'),tk.StringVar(value='15'),tk.StringVar(value='60')
         self.channel=tk.StringVar(value=str(prefs.get('channel_name','CEFASGAMER'))[:40])
         accent=prefs.get('accent',ui.BLUE)
@@ -66,8 +67,8 @@ class App(tk.Tk):
         self.key_store=KeyStore()
         self._session_key=''
         self._gemini_consent=None
-        self.workflow_mode='setup'
-        self.workflow_status=tk.StringVar(value='Antes de começar, configure e valide sua chave Gemini.')
+        self.workflow_mode='radar'
+        self.workflow_status=tk.StringVar(value='Motor local em CPU. Whisper e Gemini são opcionais; nenhuma chave é necessária para analisar áudio e imagem.')
         self._validated_key=None
         self._validated_models=()
         self._pending_review=None
@@ -76,6 +77,7 @@ class App(tk.Tk):
         self._failure_dialog=None
         self._retry_after_id=None
         self._closing=False
+        self.init_analysis(prefs)
         self.ai_reviews={};self.ai_signatures={};self.ai_context={};self.ai_response=None
         ui.build(self)
         self.bind('<MouseWheel>',self._scroll_page,add='+')
@@ -83,20 +85,19 @@ class App(tk.Tk):
         self.bind('<Button-5>',self._scroll_page,add='+')
         self._load_logo()
         self._update_key_status()
-        self.show_page('settings')
+        self.show_page('video')
+        self.refresh_jobs()
         self._sync_controls()
         self.protocol('WM_DELETE_WINDOW',self.close)
         self._poll_after=self.after(100,self.poll)
+        self._monitor_after=self.after(500,self.update_runtime)
 
     def show_page(self,name):
-        if self.workflow_mode=='setup' and name!='settings':
-            name='settings'
-            self.status.set('Configure a chave, valide os modelos e clique em “Usar Radar + Gemini”.')
         pages={'video':('Selecione sua gravação','Traga o vídeo. O Radar ajuda a encontrar momentos que merecem revisão.'),
                'analysis':('Prepare a análise','Escolha o áudio, a transcrição e a duração dos seus cortes.'),
                'review':('Revise os cortes','Veja os horários originais, ajuste os limites e decida o que exportar.'),
                'export':('Pronto para editar e publicar','Vídeos, transcrições, legendas e projetos de edição em um só lugar.'),
-               'settings':('Configure seu Radar + Gemini','Valide sua chave, escolha o modelo e autorize a revisão automática das falas.')}
+               'settings':('Configurações do seu Radar','Desempenho em CPU, pesos dos sinais, identidade do canal e Gemini opcional.')}
         if name not in pages:return
         self.current_page=name
         self.page_title.set(pages[name][0]);self.page_subtitle.set(pages[name][1])
@@ -118,7 +119,7 @@ class App(tk.Tk):
             return 'break'
 
     def _sync_controls(self):
-        ready=self.workflow_mode!='setup'
+        ready=True
         for key,b in self._nav_buttons.items():b.configure(state='normal' if ready or key=='settings' else 'disabled')
         for b in self._run_buttons:b.configure(state='normal' if ready and not self.busy else 'disabled')
         for b in self._cut_buttons:b.configure(state='normal' if ready and self.cuts and not self.busy else 'disabled')
@@ -126,6 +127,8 @@ class App(tk.Tk):
         self.next_analysis.configure(state='normal' if ready and self.media and not self.busy else 'disabled')
         self.ai_export_button.configure(state='normal' if self.ai_response and not self.busy else 'disabled')
         self.resume_gemini_button.configure(state='normal' if self._pending_review and not self.busy and time.monotonic()>=self._retry_at else 'disabled')
+        self.pause_button.configure(state='normal' if self.busy and not self._closing else 'disabled')
+        self.resume_analysis_button.configure(state='normal' if self.media and self._has_resume and not self.busy else 'disabled')
         self.configure(cursor='watch' if self.busy else '')
 
     def _set_text(self,widget,text):
@@ -229,10 +232,12 @@ class App(tk.Tk):
         self.progress.configure(mode='indeterminate')
         self.progress.start(20)
         self.cancel.clear()
+        self.cancel.begin(self.analysis_options)
+        self.cancel.report(message,0,None)
         self._sync_controls()
         def worker():
             try:
-                result = function()
+                with self.cancel.bind():result = function()
                 self.events.put(('done', (done, result)))
             except Cancelled:
                 self.events.put(('cancel', cancelled))
@@ -247,13 +252,17 @@ class App(tk.Tk):
                 kind, value = self.events.get_nowait()
                 if kind == 'progress':
                     self.progress.stop()
-                    self.progress.configure(mode='determinate')
-                    self.progress['value'], msg = value
+                    amount,msg=value
+                    if amount is None:
+                        self.progress.configure(mode='indeterminate');self.progress.start(20)
+                    else:
+                        self.progress.configure(mode='determinate');self.progress['value']=amount
                     self.status.set(msg)
                 else:
                     self.progress.stop()
                     self.progress.configure(mode='determinate')
                     self.busy = False
+                    self.cancel.finish()
                     self._sync_controls()
                     if kind == 'done' and not self._closing:
                         callback, result = value
@@ -282,7 +291,6 @@ class App(tk.Tk):
     def choose(self):
         if self.busy:
             return
-        if self.workflow_mode=='setup':return self.show_page('settings')
         path = filedialog.askopenfilename(filetypes=[('Vídeo', '*.mp4 *.mkv *.mov *.avi'), ('Todos', '*.*')])
         if path:
             self.work(lambda: probe(path), self.loaded)
@@ -297,15 +305,19 @@ class App(tk.Tk):
         self.info.set(f'{timestamp(media.duration)} | {media.width}×{media.height} | FPS médio {media.fps:.3f} | {media.codec} | {len(media.audio)} faixas de áudio')
         self.track['values'] = ['Áudio completo (mix)'] + [f"Faixa {a['index']} — {a['codec']} {a['channels']} canais {a['language']} {a['title']}" for a in media.audio]
         self.track.current(0)
+        microphones=[i+1 for i,a in enumerate(media.audio) if re.search(r'\b(microfone|microphone|mic|voz|voice)\b',a.get('title',''),re.I)]
+        if len(microphones)==1:self.track.current(microphones[0])
+        self.load_analysis_state(media)
         self.show_page('analysis')
         self._sync_controls()
 
     def analyze(self):
         if self.busy:return
-        if self.workflow_mode=='setup':return self.show_page('settings')
         if not self.media:
             return self.error('Selecione um vídeo primeiro.')
         try:
+            self.analysis_options=self.options_from_ui()
+            save_settings({'analysis_options':self.analysis_options.record(),'whisper_model':self.model.get()})
             if self.workflow_mode=='gemini' and not self._gemini_ready():
                 return self.require_gemini_setup()
             if self.workflow_mode=='gemini' and self.model.get()=='off':
@@ -315,13 +327,18 @@ class App(tk.Tk):
             count=min(20,self._requested_count*2) if self.workflow_mode=='gemini' else self._requested_count
             args = (self.media.path, 'mix' if self.track.current() == 0 else str(self.media.audio[self.track.current()-1]['index']),
                     count, float(self.minimum.get()), float(self.maximum.get()), self.model.get())
-            self.work(lambda: analyze(*args, cancel=self.cancel, progress=lambda n, msg: self.events.put(('progress', (n, msg)))), self.results)
+            self._dismiss_analysis_error()
+            self.show_page('analysis')
+            self.work(lambda: analyze(*args,cancel=self.cancel,options=self.analysis_options,requested_count=self._requested_count,progress=lambda n,msg:self.events.put(('progress',(n,msg)))),
+                      self.results,message='Verificando checkpoints e iniciando análise local…',failed=self.analysis_failed,cancelled=self.analysis_cancelled)
         except Exception as exc:
             self.error(exc)
 
     def results(self, result):
         self.media, self.cuts, self.speech, warnings = result
         self._pending_review=None
+        self._has_resume=True
+        self.refresh_jobs()
         self.ai_reviews.clear();self.ai_signatures.clear();self.ai_context.clear();self.ai_response=None
         self.refresh()
         if self.cuts:
@@ -329,8 +346,10 @@ class App(tk.Tk):
             self.table.focus(str(self.cuts[0].id))
         self.show_page('review')
         self.show_detail()
-        if warnings:
-            messagebox.showwarning('Limitações da análise', '\n'.join(warnings))
+        self.resume_info.set('Checkpoints atualizados. Retomar análise reutiliza etapas e lotes válidos; apenas entradas ou configurações relevantes alteradas são refeitas.')
+        actionable=[warning for warning in warnings if not warning.startswith('Transcrição desativada.')]
+        if actionable:
+            messagebox.showwarning('Limitações da análise','\n'.join(actionable))
         if self.workflow_mode=='gemini' and self.cuts:
             self._pending_review={'media':self.media,'cuts':list(self.cuts),'speech':list(self.speech),'count':self._requested_count}
             self.cuts=sorted(self.cuts,key=lambda c:c.score,reverse=True)[:self._requested_count]
@@ -338,7 +357,9 @@ class App(tk.Tk):
             self.retry_gemini()
         elif self.workflow_mode=='gemini':
             self.workflow_status.set('Nenhum candidato encontrado pelo Radar. Não houve solicitação ao Gemini.')
-        else:self.workflow_status.set('Resultado local: somente Radar. Os cortes não foram revisados pelo Gemini.')
+        else:
+            quantity='1 sugestão' if len(self.cuts)==1 else f'{len(self.cuts)} sugestões'
+            self.workflow_status.set(f'Análise local concluída em CPU: {quantity} com timestamps e motivos. Whisper e Gemini permanecem opcionais.')
 
     def refresh(self):
         selection = self.table.selection()
@@ -438,7 +459,7 @@ class App(tk.Tk):
                 raise ValueError('Selecione e analise um vídeo.')
             path = filedialog.asksaveasfilename(defaultextension='.json', filetypes=[('JSON', '*.json'), ('CSV', '*.csv')])
             if path:
-                self.notify(export_report(self.media, self.cuts, path))
+                self.notify(export_report(self.media,self.cuts,path,speech=self.speech))
         except Exception as exc:
             self.error(exc)
 
@@ -457,10 +478,30 @@ class App(tk.Tk):
                     self.last_output = Path(output).parent
                     self.notify(f'MP4 salvo: {output}')
                     messagebox.showinfo('MP4 exportado', f'Arquivo salvo em:\n{output}')
-                self.work(lambda: export_clip(self.media, c, path, self.cancel, overwrite), done,
+                def encoded(seconds):
+                    self.cancel.report('Exportação',seconds,c.duration,'s')
+                    self.events.put(('progress',(100*seconds/c.duration,'Exportando MP4 por timestamps originais…')))
+                self.work(lambda: export_clip(self.media,c,path,self.cancel,overwrite,encoded), done,
                           message=f'Exportando MP4: {timestamp(c.start)} até {timestamp(c.end)}…')
         except Exception as exc:
             self.error(exc)
+
+    def export_batch(self):
+        if self.busy:return
+        try:
+            cuts=self.selected()
+            folder=filedialog.askdirectory(title='Pasta da fila de MP4 (repita para retomar clipes pendentes)',initialdir=str(self.last_output))
+            if not folder:return
+            self.last_output=Path(folder)
+            save_settings({'last_export_dir':str(self.last_output)})
+            def done(outputs):
+                self.notify(f'{len(outputs)} clipes concluídos/verificados em {self.last_output}')
+                self.refresh_jobs()
+                messagebox.showinfo('Fila MP4 concluída',f'{len(outputs)} clipes concluídos/verificados.\nPasta: {self.last_output}\n\nRepetir a fila com os mesmos cortes e pasta reaproveita os arquivos íntegros já concluídos.')
+            self.work(lambda:export_clips(self.media,cuts,folder,self.cancel,progress=lambda n,msg:self.events.put(('progress',(n,msg)))),done,
+                      message='Preparando fila sequencial de MP4…',
+                      cancelled=lambda:self.notify('Fila cancelada. Os clipes e checkpoints concluídos foram preservados; repita a fila na mesma pasta para retomar.'))
+        except Exception as exc:self.error(exc)
 
     def transcript(self):
         if self.busy:
@@ -543,7 +584,7 @@ class App(tk.Tk):
                     else:
                         messagebox.showwarning('Exportação OTIO', text + '\nA CLI não está conectada; não foi gerado .fcproj. Importe os OTIO pelo FilmCraft ou conecte uma instalação oficial para gerar projetos nativos.')
                 self.work(lambda: create_projects(self.media, cuts, folder, individual, cli, self.cancel,
-                    progress=lambda n, msg: self.events.put(('progress', (n, msg)))), done,
+                    progress=lambda n, msg: self.events.put(('progress', (None, msg)))), done,
                     message='Criando projetos para o FilmCraft…')
         except Exception as exc:
             self.error(exc)
@@ -665,7 +706,7 @@ class App(tk.Tk):
         except RuntimeError:return False
 
     def require_gemini_setup(self):
-        self.workflow_mode='setup'
+        self.workflow_mode='radar'
         self.workflow_status.set('Configure e valide a chave/modelo antes de iniciar Radar + Gemini.')
         self.show_page('settings');self._sync_controls()
         self.notify(self.workflow_status.get())
@@ -686,6 +727,7 @@ class App(tk.Tk):
                 if not messagebox.askyesno('Ativar revisão automática das falas',text):return
             save_settings({'gemini_model':consent[0],'gemini_search':consent[1]})
             self._session_key=key
+            if self.model.get()=='off':self.model.set('tiny')
             self._gemini_consent=consent
             self.workflow_mode='gemini'
             self._dismiss_gemini_failure()
@@ -789,7 +831,6 @@ class App(tk.Tk):
 
     def review_gemini(self):
         if self.busy:return self.error('Aguarde ou cancele a operação atual antes de solicitar outra revisão.')
-        if self.workflow_mode=='setup':return self.show_page('settings')
         try:
             cuts=self.selected()
             key=self._get_gemini_key()
@@ -840,8 +881,10 @@ class App(tk.Tk):
             self.after(200, self.close)
             return
         self.after_cancel(self._poll_after)
+        self.after_cancel(self._monitor_after)
         if self._retry_after_id is not None:self.after_cancel(self._retry_after_id)
         self._dismiss_gemini_failure()
+        self._dismiss_analysis_error()
         for p in self.preview_processes:
             if p.poll() is None:
                 p.terminate()

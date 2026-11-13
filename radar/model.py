@@ -36,6 +36,7 @@ class Media:
     audio: list
     video_index: int
     variable_fps: bool = False
+    source_id: str = ''
 
 
 @dataclass
@@ -65,6 +66,7 @@ class Cut:
     def record(self, media):
         self.validate(media.duration)
         return {**asdict(self), 'start_time': timestamp(self.start), 'end_time': timestamp(self.end),
+                'source_id':media.source_id,'source':media.path,
                 'duration': self.duration, 'category': self.category, 'fps': media.fps,
                 'nominal_start_frame': round(self.start * media.fps),
                 'nominal_end_frame': round(self.end * media.fps),

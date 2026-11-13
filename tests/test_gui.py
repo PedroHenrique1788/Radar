@@ -179,26 +179,26 @@ def hybrid(tmp_path,monkeypatch):
     app.close()
 
 
-def test_wizard_requires_validated_setup_and_automatic_review_is_opt_in(hybrid,monkeypatch,tmp_path):
+def test_local_startup_and_gemini_automatic_review_is_opt_in(hybrid,monkeypatch,tmp_path):
     from radar import gui
     app=hybrid.app
-    assert app.current_page=='settings'
+    assert app.current_page=='video' and app.model.get()=='off'
     app.show_page('video')
-    assert app.current_page=='settings' and app._nav_buttons['video'].instate(['disabled'])
-    app.analyze()
-    assert not hybrid.analyses and not hybrid.calls
+    assert app.current_page=='video' and not app._nav_buttons['video'].instate(['disabled'])
+    app.loaded(hybrid.media);app.count.set('1');app.analyze();hybrid.finish()
+    assert len(hybrid.analyses)==1 and not hybrid.calls and app.workflow_mode=='radar'
     app.gemini_key_input.set(hybrid.key)
     app.enable_gemini()
-    assert hybrid.errors and app.workflow_mode=='setup'
+    assert hybrid.errors and app.workflow_mode=='radar'
     hybrid.errors.clear()
     app.connect_gemini();hybrid.finish()
     assert app.gemini_model.get()=='gemini-test-flash' and not hybrid.calls
     monkeypatch.setattr(gui.messagebox,'askyesno',lambda *a:False)
     app.enable_gemini()
-    assert app.workflow_mode=='setup' and not hybrid.calls
+    assert app.workflow_mode=='radar' and not hybrid.calls
     monkeypatch.setattr(gui.messagebox,'askyesno',lambda *a:True)
     app.enable_gemini()
-    assert app.current_page=='video' and not hybrid.calls
+    assert app.current_page=='analysis' and app.model.get()=='tiny' and not hybrid.calls
     assert hybrid.key not in (tmp_path/'temporarios/settings.json').read_text(encoding='utf-8')
 
 
@@ -219,7 +219,7 @@ def test_gemini_selects_from_extra_candidates_without_changing_original_times(hy
     app.cuts[0].start=41
     assert app._valid_ai(app.cuts[0]) is None
     app.forget_gemini_key()
-    assert not app._session_key and app.workflow_mode=='setup'
+    assert not app._session_key and app.workflow_mode=='radar'
 
 
 @pytest.mark.parametrize('status',[429,503])
@@ -266,7 +266,7 @@ def test_setup_failure_offers_explicit_local_mode(hybrid):
     hybrid.model_failures.append(GeminiError('Chave recusada',status=403))
     app.gemini_key_input.set(hybrid.key)
     app.connect_gemini();hybrid.finish()
-    assert app.workflow_mode=='setup' and app._failure_dialog.winfo_exists()
+    assert app.workflow_mode=='radar' and app._failure_dialog.winfo_exists()
     app.use_radar_only()
     assert app.workflow_mode=='radar' and app.current_page=='video' and not hybrid.calls
 
@@ -313,7 +313,7 @@ def test_changed_key_model_or_search_requires_new_setup_before_automatic_send(hy
     hybrid.enable();app.loaded(hybrid.media)
     getattr(app,field).set(value)
     app.analyze()
-    assert app.workflow_mode=='setup' and app.current_page=='settings'
+    assert app.workflow_mode=='radar' and app.current_page=='settings'
     assert not hybrid.analyses and not hybrid.calls
 
 
@@ -330,3 +330,72 @@ def test_manual_review_can_still_be_declined_in_local_mode(hybrid,monkeypatch):
     monkeypatch.setattr(gui.messagebox,'askyesno',lambda *a:True)
     app.review_gemini();hybrid.finish()
     assert len(hybrid.calls)==1 and app.cuts[0].id==2
+
+
+def test_pause_button_keeps_ui_responsive_and_cancel_stops_worker(hybrid,monkeypatch):
+    import time
+    from radar import gui
+    app=hybrid.app
+    def slow(*args,**kw):
+        for n in range(300):
+            kw['cancel'].checkpoint()
+            kw['cancel'].report('Teste de lotes',n,300,'lotes')
+            time.sleep(.01)
+        return hybrid.media,hybrid.cuts,hybrid.speech,[]
+    monkeypatch.setattr(gui,'analyze',slow)
+    app.loaded(hybrid.media);app.analyze()
+    app.pause_button.invoke()
+    deadline=time.monotonic()+3
+    while not app.cancel.snapshot()['paused'] and time.monotonic()<deadline:app.update();time.sleep(.02)
+    assert app.cancel.snapshot()['paused']
+    done=app.cancel.snapshot()['done']
+    app.channel.set('Interface responsiva');app.update();time.sleep(.1)
+    assert app.cancel.snapshot()['done']==done and app.channel.get()=='Interface responsiva'
+    app.pause_button.invoke()
+    app.cancel.set();hybrid.finish()
+    assert not app.busy and 'cancelada' in app.resume_info.get().lower()
+
+
+def test_gui_real_failure_resume_and_reopen(tmp_path,monkeypatch):
+    import time
+    from radar.gui import App
+    from radar.media import executable,run,probe
+    from radar import pipeline,gui
+    monkeypatch.chdir(tmp_path)
+    video=tmp_path/'original.mp4'
+    run([executable('ffmpeg'),'-v','error','-f','lavfi','-i',"color=black:s=128x72:r=10:d=24,drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='gte(t,18)'",
+         '-f','lavfi','-i','sine=frequency=440:duration=24','-c:v','libx264','-c:a','aac',video])
+    monkeypatch.setattr(gui.messagebox,'showwarning',lambda *a:None)
+    actual=pipeline.visual_features
+    def fail(media,*a,**kw):
+        if kw['start']==16:raise RuntimeError('Falha de lote para validar o botão de retomada')
+        return actual(media,*a,**kw)
+    monkeypatch.setattr(pipeline,'visual_features',fail)
+    app=App();old=None;errors=[]
+    monkeypatch.setattr(app,'error',lambda e:errors.append(str(e)))
+    def finish(window):
+        deadline=time.monotonic()+30
+        while window.busy and time.monotonic()<deadline:window.update();time.sleep(.02)
+        assert not window.busy and not errors,errors
+        window.update()
+    try:
+        app.loaded(probe(video));app.option_vars['batch_seconds'].set('16')
+        app.minimum.set('3');app.maximum.set('8');app.analyze();finish(app)
+        assert app._analysis_error_dialog.winfo_exists() and app._has_resume
+        assert 'Análise visual' in app.resume_info.get()
+        app.skip_failed_module('visual');finish(app)
+        assert app.current_page=='review' and not app.option_vars['visual'].get()
+        app.option_vars['visual'].set(True)
+        monkeypatch.setattr(pipeline,'visual_features',actual)
+        app.resume_analysis_button.invoke();finish(app)
+        assert app.current_page=='review' and app.cuts and not app._analysis_error_dialog
+        app.close();old=app
+        app=App()
+        monkeypatch.setattr(app,'error',lambda e:errors.append(str(e)))
+        app.loaded(probe(video))
+        assert app.option_vars['batch_seconds'].get()=='16' and app._has_resume
+        def unexpected(*a,**kw):raise AssertionError('Reabertura repetiu etapa já concluída')
+        monkeypatch.setattr(pipeline,'visual_features',unexpected);monkeypatch.setattr(pipeline,'extract_audio',unexpected)
+        app.resume_analysis();finish(app)
+        assert app.cuts and app.current_page=='review' and app.jobs_table.get_children()
+    finally:app.close()
