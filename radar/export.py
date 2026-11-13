@@ -130,6 +130,7 @@ def export_clips(media,cuts,folder,cancel=None,cache_dir='temporarios',progress=
     cuts=list(cuts)
     if not cuts:raise ValueError('Selecione pelo menos um corte para a fila.')
     for cut in cuts:cut.validate(media.duration)
+    cuts.sort(key=lambda cut:(cut.start,cut.end,cut.id))
     folder=Path(folder).resolve();folder.mkdir(parents=True,exist_ok=True)
     control=cancel if isinstance(cancel,ExecutionControl) else ExecutionControl(options,cancel)
     store=CheckpointStore(media.path,cache_dir);store.acquire()

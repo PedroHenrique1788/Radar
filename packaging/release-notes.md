@@ -1,4 +1,4 @@
-**Cefas Radar de Cortes 2.0 — Fase 1 / versão 0.4.0**, para **Windows 10/11 de 64 bits**.
+**Cefas Radar de Cortes 2.0 — Fase 1 / versão 0.4.1**, para **Windows 10/11 de 64 bits**.
 
 Baixe o arquivo **RadarCortes-Setup-…-Windows-x64.exe**, abra-o e siga o assistente. Depois abra **Radar de Cortes** pelo Menu Iniciar. O atalho na Área de Trabalho é opcional.
 
@@ -18,6 +18,8 @@ A pontuação é heurística, não uma previsão de viralização. Revise cortes
 **Checkpoints por etapa e lote.** Pausar/retomar, cancelar e reabrir análises recentes preservam os lotes concluídos. Arquivo e configurações são revalidados antes de reutilizar o cache. Erros identificam a etapa; é possível continuar sem áudio/imagem ou sem transcrição opcional. O progresso é da etapa atual, com unidades, tempo, ETA quando houver dados e métricas aproximadas de CPU/RAM.
 
 **Pesos configuráveis e fila MP4 recuperável.** Sinais ausentes têm os pesos redistribuídos; os motivos mostram a composição da nota. A fila é sequencial, verifica SHA-256 de clipes prontos, retoma pendentes e preserva arquivos alterados pelo usuário. Relatórios incluem o identificador do original. Vertical 9:16, timeline/waveform e novos indicadores vocais ficam nas próximas fases.
+
+A versão 0.4.1 estabiliza a ordem cronológica da fila: reordenar os mesmos cortes na tabela antes de retomar não repete os clipes íntegros já concluídos.
 
 **Exportações preservadas:** MP4, transcrição TXT com horários originais, legendas SRT e projetos FilmCraft conjuntos ou individuais. A análise precisa ter transcrição de fala (tiny/base/small) para exportar TXT/SRT. O aplicativo confirma o destino dos arquivos e permite repetir projetos sem colidir com os anteriores.
 

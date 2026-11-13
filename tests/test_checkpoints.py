@@ -168,7 +168,7 @@ def test_queue_cancel_resume_integrity_and_user_modified_clip(source,tmp_path,mo
     actual=export.export_clip;calls=[]
     def encoded(*a,**kw):calls.append(a[1].id);return actual(*a,**kw)
     monkeypatch.setattr(export,'export_clip',encoded)
-    files=export_clips(media,cuts,folder,cache_dir=cache)
+    files=export_clips(media,list(reversed(cuts)),folder,cache_dir=cache)
     assert calls==[2,3] and existing[0].read_bytes()==preserved
     assert [probe(path).duration for path in files]==pytest.approx([2,4,5],abs=.06)
     assert all(len(probe(path).audio)==2 for path in files)

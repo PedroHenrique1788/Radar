@@ -2,7 +2,7 @@
 
 Aplicativo desktop em português para revisar gravações longas de gameplay e localizar intervalos aproveitáveis. Processa localmente em CPU, oferece faixas OBS, análise sonora/visual, transcrição opcional, pontuação explicável, revisão manual e exportação. Não prevê viralização nem reconhece semanticamente acontecimentos de jogos.
 
-**Fase 1 — versão 0.4.0:** motor local em CPU, sem chave/API obrigatória, checkpoints por etapa/lote, pausa/retomada, métricas reais por etapa, pesos configuráveis e fila MP4 recuperável. Whisper e Gemini são opcionais. Veja a [auditoria](docs/AUDITORIA_2_0.md) e o [guia da Fase 1, comandos e limitações](docs/FASE1.md).
+**Fase 1 — versão 0.4.1:** motor local em CPU, sem chave/API obrigatória, checkpoints por etapa/lote, pausa/retomada, métricas reais por etapa, pesos configuráveis e fila MP4 recuperável. Whisper e Gemini são opcionais. Veja a [auditoria](docs/AUDITORIA_2_0.md) e o [guia da Fase 1, comandos e limitações](docs/FASE1.md).
 
 ## Instalação com assistente (recomendada)
 
