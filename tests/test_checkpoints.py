@@ -123,9 +123,9 @@ def test_corrupt_feature_cache_recomputes_only_damaged_batch(source,tmp_path,mon
     store=CheckpointStore(source,tmp_path)
     key=store.manifest['stages']['visual']['key']
     path=store.location('visual',key,1)
-    record=json.loads(path.read_text())
+    record=json.loads(path.read_text(encoding='utf-8'))
     record['data']['values'][0]['change']=.999
-    path.write_text(json.dumps(record))
+    path.write_text(json.dumps(record),encoding='utf-8')
     actual=pipeline.visual_features;calls=[]
     def repaired(media,*a,**kw):calls.append(kw['start']);return actual(media,*a,**kw)
     monkeypatch.setattr(pipeline,'visual_features',repaired)
@@ -191,7 +191,7 @@ def test_long_synthetic_video_batches_have_original_times(tmp_path):
     assert all(n is None or 0<=n<=100 for n,_ in progress)
     state=latest_request(source,tmp_path/'cache')
     assert state['stages']['visual']['done']==1800 and state['stages']['extract']['status']=='skipped'
-    report=json.loads(export_report(media,cuts,tmp_path/'report.json').read_text())
+    report=json.loads(export_report(media,cuts,tmp_path/'report.json').read_text(encoding='utf-8'))
     assert report['source_id']==media.source_id and report['cuts'][0]['source_id']==media.source_id
 
 
@@ -246,7 +246,7 @@ def test_report_refreshes_transcript_after_manual_boundary_edit(source,tmp_path)
     speech=[{'start':1,'end':6,'text':'antes dentro depois','words':[
         {'start':1,'end':1.5,'word':'antes'},{'start':3,'end':4,'word':'dentro'},{'start':5.5,'end':6,'word':'depois'}]}]
     report=export_report(media,[cut],tmp_path/'updated.json',speech=speech)
-    row=json.loads(report.read_text())['cuts'][0]
+    row=json.loads(report.read_text(encoding='utf-8'))['cuts'][0]
     assert row['transcript']=='dentro' and row['start_time']=='00:00:02.000'
 
 
