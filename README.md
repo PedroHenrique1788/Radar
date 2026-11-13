@@ -10,6 +10,8 @@ A base da [Fase 1](docs/FASE1.md) permanece: motor local em CPU, sem chave/API o
 
 ## Instalação com assistente (recomendada)
 
+[Baixar Radar de Cortes 0.6.0 para Windows x64](https://github.com/PedroHenrique1788/Radar/releases/download/v0.6.0/RadarCortes-Setup-0.6.0-Windows-x64.exe) · [Notas da versão e checksums](https://github.com/PedroHenrique1788/Radar/releases/tag/v0.6.0)
+
 Baixe o arquivo **RadarCortes-Setup-…-Windows-x64.exe** na [página de versões](https://github.com/PedroHenrique1788/Radar/releases). Execute-o, conclua o assistente e abra **Radar de Cortes** no Menu Iniciar. A Área de Trabalho pode receber um atalho opcional. Não baixe “Source code” para esse modo de instalação.
 
 O pacote inclui Python, FFmpeg/FFprobe/FFplay e o modelo `tiny` de transcrição em CPU. O uso básico funciona sem instalar dependências nem baixar modelos na primeira abertura. `base` e `small` continuam opcionais e precisam de download. FilmCraft é um aplicativo separado, opcional.

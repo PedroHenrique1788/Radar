@@ -1,6 +1,6 @@
 # Cefas Radar de Cortes 2.0 — Fase 3: estúdio de revisão
 
-Versão **0.6.0**, sobre a Fase 2 existente. O código, EXE, instalação, aplicativo instalado e desinstalação passaram na validação nativa Windows. O fluxo repete esses gates no pacote final antes de criar a release.
+Versão **0.6.0**, sobre a Fase 2 existente. O código, EXE, instalação, aplicativo instalado e desinstalação passaram na validação nativa Windows. A [release 0.6.0](https://github.com/PedroHenrique1788/Radar/releases/tag/v0.6.0) também passou em todos esses gates antes da publicação.
 
 ## Começar
 

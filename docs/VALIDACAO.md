@@ -22,11 +22,13 @@ No executável congelado, o smoke passou pela interface, mídia/exportação, re
 
 A execução [43509894390](https://github.com/PedroHenrique1788/Radar/actions/runs/43509894390), no commit `55f67f2`, passou em todos os gates: suíte do código, geração PyInstaller, teste offline do EXE, Inno Setup, instalação silenciosa, teste funcional instalado e desinstalação. O novo bloco do estúdio confirmou MP4 vertical com legendas, preservação do áudio, projetos, ondas reais, criação manual, favorito e zoom da timeline. Whisper real, FilmCraft oficial, cliente Gemini sem rede e DPAPI também passaram. O erro TLS observado no Python Linux deste executor não se reproduziu no pacote Windows. Não houve chamada autenticada ao Google nem consulta de cota.
 
-Esta rodada gerou o instalador de validação 0.6.0-dev. A release oficial 0.6.0 repete esses mesmos gates sobre a tag antes de publicar o instalador, os checksums e o manifesto.
+A primeira rodada gerou o instalador de validação 0.6.0-dev. A [release oficial 0.6.0](https://github.com/PedroHenrique1788/Radar/releases/tag/v0.6.0), tag no commit `b7f87aa`, passou novamente nos mesmos gates na execução [43511367500](https://github.com/PedroHenrique1788/Radar/actions/runs/43511367500). O workflow publicou o instalador Windows x64, SHA256SUMS.txt e o manifesto somente após código, EXE, instalação, teste instalado e desinstalação aprovados.
+
+O instalador público `RadarCortes-Setup-0.6.0-Windows-x64.exe` foi baixado e conferido após a publicação: arquivo PE Windows, 296854797 bytes, SHA-256 `f5e7c1c25539034b9a165a4e675d778907b6d3596b2fa0dca7af5e454497171f` idêntico ao SHA256SUMS.txt da release. O manifesto público também foi baixado e lido, com revisão tiny e checksum FFmpeg presentes.
 
 ### Entrega e limites
 
-Após a revisão local, o usuário autorizou enviar e publicar a versão com instalador. Os arquivos de build estão preparados para 0.6.0, e o smoke do pacote inclui as novas funções. A publicação continua condicionada aos gates nativos do código, EXE, instalação, aplicativo instalado e desinstalação.
+Após a revisão local, o usuário autorizou enviar e publicar a versão com instalador. Os arquivos de build estão preparados para 0.6.0, e o smoke do pacote inclui as novas funções. Todos os gates nativos do código, EXE, instalação, aplicativo instalado e desinstalação foram aprovados na entrega 0.6.0 publicada.
 
 As capturas do [guia da Fase 3](FASE3.md) mostram a aplicação real em Tk 8.6, mídia sintética, cortes criados manualmente, ondas lidas do arquivo e prévia vertical efetivamente renderizada. Não houve medição no Lenovo i7-8565U/MX110, avaliação editorial com gameplay real ou chamada Gemini autenticada. SRT/ASS dependem dos tempos da transcrição; fonte externa continua não sendo incorporada automaticamente ao áudio do MP4. Projetos não incluem cópias dos vídeos nem credenciais.
 
