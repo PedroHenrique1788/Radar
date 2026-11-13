@@ -122,6 +122,7 @@ def build(app):
     app._nav_buttons={}
     app._cut_buttons=[]
     app._run_buttons=[]
+    app._config_buttons=[]
     footer=ttk.Frame(app,padding=(18,10))
     footer.pack(side='bottom',fill='x')
     app.progress=ttk.Progressbar(footer,maximum=100,length=130)
@@ -186,6 +187,11 @@ def build_video(app,parent):
 
 
 def build_analysis(app,parent):
+    box=card(parent,'Radar + Gemini no mesmo fluxo')
+    ttk.Label(box,textvariable=app.workflow_status,style='CardMuted.TLabel',wraplength=650).pack(anchor='w',fill='x',pady=(0,8))
+    description(box,'O Radar prepara até 20 candidatos; o Gemini compara as falas e escolhe a quantidade solicitada. Os horários originais são preservados. A lista de modelos não confirma cota gratuita disponível.')
+    row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
+    button(row,'Configurar Gemini / conferir cota',lambda:app.show_page('settings'))
     box=card(parent,'Áudio e transcrição')
     description(box,'Em gravações do OBS, escolha o microfone para analisar as falas ou use o mix completo.')
     ttk.Label(box,text='Faixa de áudio',style='Card.TLabel').pack(anchor='w')
@@ -223,7 +229,7 @@ def build_review(app,parent):
     ttk.Label(left,textvariable=app.cut_count,style='Section.TLabel').grid(row=1,column=0,sticky='w',pady=(0,8))
     order=ttk.Frame(left,style='Card.TFrame');order.grid(row=2,column=0,sticky='ew',pady=(0,8))
     button(order,'Por tempo',lambda:app.sort('start'))
-    button(order,'Por potencial',lambda:app.sort('score'))
+    button(order,'Por potencial',lambda:app.sort('potential'))
     columns=('id','start','end','duration','score','category','title','ai')
     app.table=ttk.Treeview(left,columns=columns,show='headings',selectmode='extended',height=7,
                            displaycolumns=('start','score','ai','title'))
@@ -259,8 +265,8 @@ def build_review(app,parent):
         app.review_tabs.add(tab,text=title)
         setattr(app,attribute,text_panel(app,tab,5))
     ai=ttk.Frame(right,style='Card.TFrame');ai.grid(row=5,column=0,sticky='ew',pady=(7,0))
-    app._cut_buttons.append(button(ai,'Revisar com Gemini',app.review_gemini,True))
-    button(ai,'Configurar',lambda:app.show_page('settings'))
+    app._cut_buttons.append(button(ai,'Revisar seleção',app.review_gemini,True))
+    app.resume_gemini_button=button(ai,'Retomar fluxo',app.retry_gemini)
     export=ttk.Frame(right,style='Card.TFrame');export.grid(row=6,column=0,sticky='ew',pady=(3,0))
     for text,command in [('TXT',app.transcript),('SRT',app.srt),('Exportar MP4',app.export_video)]:
         app._cut_buttons.append(button(export,text,command,primary=text=='Exportar MP4'))
@@ -294,16 +300,9 @@ def build_export(app,parent):
 
 
 def build_settings(app,parent):
-    box=card(parent,'Identidade do canal')
-    ttk.Label(box,text='Nome do canal',style='Card.TLabel').pack(anchor='w')
-    ttk.Entry(box,textvariable=app.channel,width=40).pack(fill='x',pady=(5,10))
-    row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
-    button(row,'Escolher azul / cor principal',app.choose_accent)
-    button(row,'Escolher logotipo PNG',app.choose_logo)
-    button(row,'Salvar identidade',app.save_brand,True)
-    description(box,'A cor azul é a referência informada por você. O logotipo pode ser escolhido do computador; a imagem original permanece intacta.')
-    box=card(parent,'Gemini • revisão opcional')
-    description(box,'Envia somente as transcrições e os horários dos cortes escolhidos ao Google. Nenhum vídeo é enviado. A análise local funciona sem chave.')
+    box=card(parent,'1. Configure o Gemini antes de começar')
+    description(box,'Após cada análise local, o Gemini revisa automaticamente as falas dos candidatos e ordena os melhores cortes. Só texto, horários e critérios dos candidatos são enviados ao Google; o vídeo fica no computador.')
+    ttk.Label(box,textvariable=app.workflow_status,style='CardMuted.TLabel',wraplength=650).pack(anchor='w',fill='x',pady=(0,8))
     ttk.Label(box,textvariable=app.gemini_status,style='Card.TLabel',wraplength=650).pack(anchor='w',pady=(0,10))
     ttk.Label(box,text='Chave do Google AI Studio',style='Card.TLabel').pack(anchor='w')
     app.key_entry=ttk.Entry(box,textvariable=app.gemini_key_input,show='•')
@@ -312,17 +311,45 @@ def build_settings(app,parent):
     app.remember_key_button.pack(anchor='w')
     if app.non_windows:app.remember_key_button.configure(state='disabled')
     row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
-    button(row,'Guardar chave',app.save_gemini_key)
-    button(row,'Remover chave salva',app.forget_gemini_key)
-    button(row,'Validar e listar modelos',app.connect_gemini,True)
+    app._config_buttons.append(button(row,'Guardar chave',app.save_gemini_key))
+    app._config_buttons.append(button(row,'Remover chave salva',app.forget_gemini_key))
+    app._config_buttons.append(button(row,'Validar e listar modelos',app.connect_gemini,True))
     ttk.Label(box,text='Modelo da sua conta',style='Card.TLabel').pack(anchor='w',pady=(12,4))
     app.gemini_model_picker=ttk.Combobox(box,textvariable=app.gemini_model,state='readonly',width=40)
     app.gemini_model_picker.pack(fill='x')
     if app.gemini_model.get():app.gemini_model_picker['values']=[app.gemini_model.get()]
     ttk.Checkbutton(box,text='Pesquisar tendências com Google Search (opcional)',variable=app.gemini_search).pack(anchor='w',pady=5)
-    description(box,'A cota gratuita e eventual cobrança dependem do projeto/modelo no Google. Pesquisa pode ter limites ou custos próprios. Confira no AI Studio. O Radar não ativa faturamento nem troca de modelo por conta própria.')
+    description(box,'Validar a chave não consulta saldo nem garante gratuidade. Confira cota e faturamento no AI Studio. O Radar não impede cobranças de um projeto com faturamento ativo. Pesquisa pode ter limites/custos próprios; não há troca de modelo nem novas tentativas automáticas após erro.')
     row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
-    button(row,'Salvar preferências Gemini',app.save_gemini_preferences,True)
-    button(row,'Abrir Google AI Studio',app.open_ai_studio)
+    app._config_buttons.append(button(row,'Usar Radar + Gemini',app.enable_gemini,True))
+    app._config_buttons.append(button(row,'Salvar preferências',app.save_gemini_preferences))
+    row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
+    button(row,'Criar / gerenciar chave',app.open_ai_studio)
+    button(row,'Conferir cota no AI Studio',app.open_gemini_quota)
+    box=card(parent,'Identidade do canal')
+    ttk.Label(box,text='Nome do canal',style='Card.TLabel').pack(anchor='w')
+    ttk.Entry(box,textvariable=app.channel,width=40).pack(fill='x',pady=(5,10))
+    row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
+    button(row,'Escolher azul / cor principal',app.choose_accent)
+    button(row,'Escolher logotipo PNG',app.choose_logo)
+    button(row,'Salvar identidade',app.save_brand,True)
     box=card(parent,'Sobre o potencial dos cortes')
     description(box,'A pontuação local é uma heurística. O Gemini acrescenta uma opinião editorial separada. Tendências pesquisadas ajudam na revisão; não garantem viralização.')
+
+
+def gemini_failure(app,title,text):
+    dialog=tk.Toplevel(app)
+    dialog.title(title)
+    dialog.geometry(f'680x{min(540,app.winfo_screenheight()-100)}')
+    dialog.transient(app)
+    frame=ttk.Frame(dialog,padding=20);frame.pack(fill='both',expand=True)
+    ttk.Label(frame,text=title,style='Title.TLabel',wraplength=630).pack(anchor='w',pady=(0,12))
+    ttk.Label(frame,text=text,wraplength=630,justify='left').pack(anchor='w',fill='x',pady=(0,16))
+    for label,command in [('Continuar só com o Radar',app.use_radar_only),
+                          ('Aguardar e tentar depois',app.wait_for_gemini),
+                          ('Configurar Gemini',lambda:(app.wait_for_gemini(),app.show_page('settings'))),
+                          ('Conferir cota no AI Studio',app.open_gemini_quota)]:
+        ttk.Button(frame,text=label,command=command).pack(fill='x',pady=3)
+    dialog.protocol('WM_DELETE_WINDOW',app.wait_for_gemini)
+    dialog.grab_set()
+    return dialog

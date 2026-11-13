@@ -93,6 +93,31 @@ def test_http_errors_never_expose_key_or_retry_with_another_model(status):
     import traceback
     assert KEY not in ''.join(traceback.format_exception(failure.value))
     assert len(t.requests)==1
+    assert failure.value.status==status
+
+
+def test_rate_limit_retains_safe_retry_after_without_sending_another_request():
+    media,cut=inputs()
+    error=urllib.error.HTTPError('https://service.invalid/',429,KEY,{'Retry-After':'120'},io.BytesIO(KEY.encode()))
+    transport=Transport(error)
+    with pytest.raises(GeminiError) as failure:
+        GeminiClient(KEY,transport).review(media,[cut],model='gemini-fast-flash')
+    assert failure.value.status==429 and failure.value.retry_after==120
+    assert KEY not in str(failure.value) and len(transport.requests)==1
+
+
+@pytest.mark.parametrize('header,expected',[(None,0),('invalid',0),('-20',0),('1.2',2),('nan',0),('inf',0),('90000',86400)])
+def test_retry_after_is_bounded_and_untrusted_text_is_discarded(header,expected):
+    from radar.gemini import _retry_after
+    assert _retry_after(header)==expected
+
+
+def test_http_date_retry_after_is_supported():
+    from datetime import datetime,timedelta,timezone
+    from email.utils import format_datetime
+    from radar.gemini import _retry_after
+    header=format_datetime(datetime.now(timezone.utc)+timedelta(seconds=60),usegmt=True)
+    assert 59<=_retry_after(header)<=60
 
 
 @pytest.mark.parametrize('payload',[result_data(score=101),result_data(score=float('nan')),result_data(ident=9),

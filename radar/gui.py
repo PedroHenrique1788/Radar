@@ -1,4 +1,5 @@
 import logging
+import math
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ import queue
 import subprocess
 import tempfile
 import threading
+import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog, colorchooser
 from .media import probe, align_bounds, executable, Cancelled
@@ -21,7 +23,7 @@ from .settings import save_filmcraft, read_settings, save_settings
 from .runtime import start_process
 from .review import review_prompt
 from .credentials import KeyStore, validate_key
-from .gemini import GeminiClient, cut_record, record_signature
+from .gemini import GeminiClient, GeminiError, cut_record, record_signature
 from . import ui
 from .export import transcript_entries
 
@@ -43,7 +45,7 @@ class App(tk.Tk):
         logging.basicConfig(filename='temporarios/radar.log',level=logging.INFO)
         self.path=tk.StringVar()
         self.info=tk.StringVar(value='Nenhum vídeo selecionado.')
-        self.status=tk.StringVar(value='Tudo começa com um vídeo. Selecione sua gravação para continuar.')
+        self.status=tk.StringVar(value='Configure sua chave Gemini, valide os modelos e ative Radar + Gemini para começar.')
         self.count,self.minimum,self.maximum=tk.StringVar(value='10'),tk.StringVar(value='15'),tk.StringVar(value='60')
         self.channel=tk.StringVar(value=str(prefs.get('channel_name','CEFASGAMER'))[:40])
         accent=prefs.get('accent',ui.BLUE)
@@ -58,12 +60,22 @@ class App(tk.Tk):
         self.gemini_key_input=tk.StringVar()
         self.gemini_model=tk.StringVar(value=str(prefs.get('gemini_model','')))
         self.gemini_search=tk.BooleanVar(value=bool(prefs.get('gemini_search',False)))
-        self.gemini_status=tk.StringVar(value='Gemini não configurado. A análise local está disponível.')
+        self.gemini_status=tk.StringVar(value='Gemini não configurado. Informe sua chave para validar o acesso.')
         self.remember_key=tk.BooleanVar(value=False)
         self.non_windows=os.name!='nt'
         self.key_store=KeyStore()
         self._session_key=''
         self._gemini_consent=None
+        self.workflow_mode='setup'
+        self.workflow_status=tk.StringVar(value='Antes de começar, configure e valide sua chave Gemini.')
+        self._validated_key=None
+        self._validated_models=()
+        self._pending_review=None
+        self._requested_count=10
+        self._retry_at=0.
+        self._failure_dialog=None
+        self._retry_after_id=None
+        self._closing=False
         self.ai_reviews={};self.ai_signatures={};self.ai_context={};self.ai_response=None
         ui.build(self)
         self.bind('<MouseWheel>',self._scroll_page,add='+')
@@ -71,17 +83,20 @@ class App(tk.Tk):
         self.bind('<Button-5>',self._scroll_page,add='+')
         self._load_logo()
         self._update_key_status()
-        self.show_page('video')
+        self.show_page('settings')
         self._sync_controls()
         self.protocol('WM_DELETE_WINDOW',self.close)
-        self.after(100,self.poll)
+        self._poll_after=self.after(100,self.poll)
 
     def show_page(self,name):
+        if self.workflow_mode=='setup' and name!='settings':
+            name='settings'
+            self.status.set('Configure a chave, valide os modelos e clique em “Usar Radar + Gemini”.')
         pages={'video':('Selecione sua gravação','Traga o vídeo. O Radar ajuda a encontrar momentos que merecem revisão.'),
                'analysis':('Prepare a análise','Escolha o áudio, a transcrição e a duração dos seus cortes.'),
                'review':('Revise os cortes','Veja os horários originais, ajuste os limites e decida o que exportar.'),
                'export':('Pronto para editar e publicar','Vídeos, transcrições, legendas e projetos de edição em um só lugar.'),
-               'settings':('Sua identidade. Suas opções.','Azul CefasGamer, integrações opcionais e configurações locais.')}
+               'settings':('Configure seu Radar + Gemini','Valide sua chave, escolha o modelo e autorize a revisão automática das falas.')}
         if name not in pages:return
         self.current_page=name
         self.page_title.set(pages[name][0]);self.page_subtitle.set(pages[name][1])
@@ -103,10 +118,14 @@ class App(tk.Tk):
             return 'break'
 
     def _sync_controls(self):
-        for b in self._run_buttons:b.configure(state='disabled' if self.busy else 'normal')
-        for b in self._cut_buttons:b.configure(state='normal' if self.cuts and not self.busy else 'disabled')
-        self.next_analysis.configure(state='normal' if self.media else 'disabled')
+        ready=self.workflow_mode!='setup'
+        for key,b in self._nav_buttons.items():b.configure(state='normal' if ready or key=='settings' else 'disabled')
+        for b in self._run_buttons:b.configure(state='normal' if ready and not self.busy else 'disabled')
+        for b in self._cut_buttons:b.configure(state='normal' if ready and self.cuts and not self.busy else 'disabled')
+        for b in self._config_buttons:b.configure(state='disabled' if self.busy else 'normal')
+        self.next_analysis.configure(state='normal' if ready and self.media and not self.busy else 'disabled')
         self.ai_export_button.configure(state='normal' if self.ai_response and not self.busy else 'disabled')
+        self.resume_gemini_button.configure(state='normal' if self._pending_review and not self.busy and time.monotonic()>=self._retry_at else 'disabled')
         self.configure(cursor='watch' if self.busy else '')
 
     def _set_text(self,widget,text):
@@ -200,7 +219,8 @@ class App(tk.Tk):
             raise ValueError('Selecione um ou mais cortes na tabela (Ctrl para vários).')
         return [c for c in self.cuts if str(c.id) in ids][:1 if one else len(self.cuts)]
 
-    def work(self, function, done, message='Processando… Aguarde ou clique em Cancelar.'):
+    def work(self, function, done, message='Processando… Aguarde ou clique em Cancelar.',failed=None,cancelled=None):
+        if self._closing:return
         if self.busy:
             self.error('Aguarde a operação atual ou clique em Cancelar.')
             return
@@ -215,10 +235,10 @@ class App(tk.Tk):
                 result = function()
                 self.events.put(('done', (done, result)))
             except Cancelled:
-                self.events.put(('cancel', None))
+                self.events.put(('cancel', cancelled))
             except Exception as exc:
                 logging.exception('Falha na operação')
-                self.events.put(('error', str(exc)))
+                self.events.put(('error', (failed,exc)))
         threading.Thread(target=worker, daemon=True).start()
 
     def poll(self):
@@ -235,7 +255,7 @@ class App(tk.Tk):
                     self.progress.configure(mode='determinate')
                     self.busy = False
                     self._sync_controls()
-                    if kind == 'done':
+                    if kind == 'done' and not self._closing:
                         callback, result = value
                         try:
                             callback(result)
@@ -243,13 +263,18 @@ class App(tk.Tk):
                             logging.exception('Falha ao exibir resultado')
                             self.error(exc)
                     elif kind == 'error':
-                        self.status.set('Falha. Consulte temporarios/radar.log.')
-                        self.error(value)
-                    else:
-                        self.status.set('Operação cancelada. Arquivos temporários removidos.')
+                        callback,exc=value
+                        if not self._closing:
+                            if callback:callback(exc)
+                            else:
+                                self.status.set('Falha. Consulte temporarios/radar.log.')
+                                self.error(exc)
+                    elif kind=='cancel':
+                        if value and not self._closing:value()
+                        else:self.status.set('Operação cancelada. Arquivos temporários removidos.')
         except queue.Empty:
             pass
-        self.after(100, self.poll)
+        if not self._closing or self.busy:self._poll_after=self.after(100,self.poll)
 
     def notify(self, value):
         self.status.set(str(value))
@@ -257,6 +282,7 @@ class App(tk.Tk):
     def choose(self):
         if self.busy:
             return
+        if self.workflow_mode=='setup':return self.show_page('settings')
         path = filedialog.askopenfilename(filetypes=[('Vídeo', '*.mp4 *.mkv *.mov *.avi'), ('Todos', '*.*')])
         if path:
             self.work(lambda: probe(path), self.loaded)
@@ -266,6 +292,7 @@ class App(tk.Tk):
         self.path.set(media.path)
         self.cuts, self.speech = [], []
         self.ai_reviews.clear();self.ai_signatures.clear();self.ai_context.clear();self.ai_response=None
+        self._pending_review=None
         self.refresh()
         self.info.set(f'{timestamp(media.duration)} | {media.width}×{media.height} | FPS médio {media.fps:.3f} | {media.codec} | {len(media.audio)} faixas de áudio')
         self.track['values'] = ['Áudio completo (mix)'] + [f"Faixa {a['index']} — {a['codec']} {a['channels']} canais {a['language']} {a['title']}" for a in media.audio]
@@ -274,17 +301,27 @@ class App(tk.Tk):
         self._sync_controls()
 
     def analyze(self):
+        if self.busy:return
+        if self.workflow_mode=='setup':return self.show_page('settings')
         if not self.media:
             return self.error('Selecione um vídeo primeiro.')
         try:
+            if self.workflow_mode=='gemini' and not self._gemini_ready():
+                return self.require_gemini_setup()
+            if self.workflow_mode=='gemini' and self.model.get()=='off':
+                raise ValueError('Radar + Gemini precisa das falas. Escolha tiny, base ou small para transcrever o áudio.')
+            self._requested_count=int(self.count.get())
+            if not 1<=self._requested_count<=20:raise ValueError('Escolha de 1 a 20 sugestões.')
+            count=min(20,self._requested_count*2) if self.workflow_mode=='gemini' else self._requested_count
             args = (self.media.path, 'mix' if self.track.current() == 0 else str(self.media.audio[self.track.current()-1]['index']),
-                    int(self.count.get()), float(self.minimum.get()), float(self.maximum.get()), self.model.get())
+                    count, float(self.minimum.get()), float(self.maximum.get()), self.model.get())
             self.work(lambda: analyze(*args, cancel=self.cancel, progress=lambda n, msg: self.events.put(('progress', (n, msg)))), self.results)
         except Exception as exc:
             self.error(exc)
 
     def results(self, result):
         self.media, self.cuts, self.speech, warnings = result
+        self._pending_review=None
         self.ai_reviews.clear();self.ai_signatures.clear();self.ai_context.clear();self.ai_response=None
         self.refresh()
         if self.cuts:
@@ -294,20 +331,29 @@ class App(tk.Tk):
         self.show_detail()
         if warnings:
             messagebox.showwarning('Limitações da análise', '\n'.join(warnings))
+        if self.workflow_mode=='gemini' and self.cuts:
+            self._pending_review={'media':self.media,'cuts':list(self.cuts),'speech':list(self.speech),'count':self._requested_count}
+            self.cuts=sorted(self.cuts,key=lambda c:c.score,reverse=True)[:self._requested_count]
+            self.refresh()
+            self.retry_gemini()
+        elif self.workflow_mode=='gemini':
+            self.workflow_status.set('Nenhum candidato encontrado pelo Radar. Não houve solicitação ao Gemini.')
+        else:self.workflow_status.set('Resultado local: somente Radar. Os cortes não foram revisados pelo Gemini.')
 
     def refresh(self):
         selection = self.table.selection()
         self.table.delete(*self.table.get_children())
         for c in self.cuts:
-            self.table.insert('', 'end', iid=str(c.id), values=(c.id, timestamp(c.start), timestamp(c.end), f'{c.duration:.3f}', c.score, c.category, c.title, self._valid_ai(c)['nota_editorial'] if self._valid_ai(c) else '—'))
+            review=self._valid_ai(c)
+            self.table.insert('', 'end', iid=str(c.id), values=(c.id, timestamp(c.start), timestamp(c.end), f'{c.duration:.3f}', c.score, c.category, review['titulo'] if review else c.title, review['nota_editorial'] if review else '—'))
         self.table.selection_set([i for i in selection if self.table.exists(i)])
-        self.cut_count.set(f'{len(self.cuts)} sugestões' if self.cuts else 'Nenhum corte ainda')
+        self.cut_count.set('1 sugestão' if len(self.cuts)==1 else f'{len(self.cuts)} sugestões' if self.cuts else 'Nenhum corte ainda')
         self._sync_controls()
 
     def sort(self, key):
         attrs = {'id':'id', 'start':'start', 'end':'end', 'duration':'duration', 'score':'score', 'category':'category', 'title':'title'}
-        if key=='ai':
-            self.cuts.sort(key=lambda c:self._valid_ai(c)['nota_editorial'] if self._valid_ai(c) else -1,reverse=True)
+        if key in ('ai','potential'):
+            self.cuts.sort(key=lambda c:(self._valid_ai(c) is not None,self._valid_ai(c)['nota_editorial'] if self._valid_ai(c) else c.score),reverse=True)
         else:
             self.cuts.sort(key=lambda c: getattr(c, attrs[key]), reverse=key == 'score')
         self.refresh()
@@ -329,6 +375,7 @@ class App(tk.Tk):
             self._set_text(self.transcript_view,'\n\n'.join(lines) or 'Sem fala transcrita neste intervalo. Analise com tiny, base ou small.')
             review=self._valid_ai(cut)
             if review:
+                self.selected_score.set(f'Local: {cut.score:g}/100 • Gemini: {review["nota_editorial"]:g}/100')
                 text=(f"Avaliação editorial Gemini: {review['nota_editorial']:g}/100\n\n{review['titulo']}\n\n"
                       f"{review['justificativa']}\n\nEdição: {review['sugestao_edicao']}\n\nLimitações: {review['limitacoes']}")
                 context=self.ai_context.get(cut.id,{})
@@ -338,7 +385,7 @@ class App(tk.Tk):
                     for source in context['sources']:text+=f"\n{source['titulo']}\n{source['url']}"
                 self._set_text(self.ai_view,text)
             else:
-                self._set_text(self.ai_view,'Revisão opcional com Gemini. Configure sua chave e selecione “Revisar com Gemini”. As falas escolhidas serão enviadas ao Google somente quando você solicitar.')
+                self._set_text(self.ai_view,'Ainda sem revisão Gemini para este corte. No modo Radar + Gemini, a revisão das falas acontece após a análise local. Você também pode solicitar uma nova revisão da seleção.')
         except ValueError:
             self.selected_title.set('Selecione um corte')
             for widget in (self.detail,self.transcript_view,self.ai_view):self._set_text(widget,'')
@@ -545,7 +592,7 @@ class App(tk.Tk):
             self.gemini_status.set('Chave disponível somente nesta sessão.')
         elif os.environ.get('GEMINI_API_KEY'):
             self.gemini_status.set('Chave disponível pela variável GEMINI_API_KEY do sistema.')
-        else:self.gemini_status.set('Gemini não configurado. A análise local está disponível.')
+        else:self.gemini_status.set('Gemini não configurado. Informe sua chave para validar o acesso.')
 
     def save_gemini_key(self):
         if self.busy:return self.error('Aguarde a operação atual antes de alterar a chave.')
@@ -558,6 +605,8 @@ class App(tk.Tk):
                 self._session_key=key
                 self.gemini_key_input.set('')
             self._gemini_consent=None
+            self._validated_key=None
+            self.require_gemini_setup()
             self._update_key_status()
             self.notify('Chave configurada. Use “Validar e listar modelos” para verificar o acesso.')
         except Exception as exc:self.error(exc)
@@ -567,6 +616,8 @@ class App(tk.Tk):
         try:
             self.key_store.delete()
             self._session_key='';self.gemini_key_input.set('');self._gemini_consent=None
+            self._validated_key=None
+            self.require_gemini_setup()
             self._update_key_status()
             self.notify('Chave salva e chave desta sessão removidas.')
         except Exception as exc:self.error(exc)
@@ -577,11 +628,14 @@ class App(tk.Tk):
             key=self._get_gemini_key()
             def done(models):
                 self._session_key=key
+                self._validated_key=hashlib.sha256(key.encode()).digest()
+                self._validated_models=tuple(models)
                 self.gemini_model_picker['values']=models
                 if self.gemini_model.get() not in models:self.gemini_model.set(models[0])
                 self.gemini_status.set(f'Conexão verificada • {len(models)} modelos de texto disponíveis na sua conta.')
-                self.notify('Escolha o modelo e salve as preferências. Confira a cota no AI Studio.')
-            self.work(lambda:GeminiClient(key).list_models(self.cancel),done,message='Validando acesso ao Gemini e carregando modelos…')
+                self.notify('Escolha o modelo e clique em “Usar Radar + Gemini”. A validação não informa saldo nem gratuidade.')
+            self.work(lambda:GeminiClient(key).list_models(self.cancel),done,message='Validando acesso ao Gemini e carregando modelos…',failed=self._gemini_failed,
+                      cancelled=lambda:self._gemini_failed(GeminiError('Validação cancelada. Você pode configurar depois ou continuar só com o Radar.')))
         except Exception as exc:self.error(exc)
 
     def save_gemini_preferences(self):
@@ -595,8 +649,147 @@ class App(tk.Tk):
     def open_ai_studio(self):
         webbrowser.open('https://aistudio.google.com/apikey')
 
+    def open_gemini_quota(self):
+        webbrowser.open('https://aistudio.google.com/usage')
+
+    def _consent_id(self,key):
+        return (self.gemini_model.get().strip(),bool(self.gemini_search.get()),hashlib.sha256(key.encode()).digest())
+
+    def _gemini_ready(self):
+        try:
+            key=self._get_gemini_key()
+            return (self._validated_key==hashlib.sha256(key.encode()).digest()
+                    and self.gemini_model.get() in self._validated_models
+                    and self._gemini_consent==self._consent_id(key))
+        except ValueError:return False
+        except RuntimeError:return False
+
+    def require_gemini_setup(self):
+        self.workflow_mode='setup'
+        self.workflow_status.set('Configure e valide a chave/modelo antes de iniciar Radar + Gemini.')
+        self.show_page('settings');self._sync_controls()
+        self.notify(self.workflow_status.get())
+
+    def enable_gemini(self):
+        if self.busy:return
+        try:
+            key=self._get_gemini_key()
+            if self._validated_key!=hashlib.sha256(key.encode()).digest() or self.gemini_model.get() not in self._validated_models:
+                raise ValueError('Clique em “Validar e listar modelos” com esta chave e escolha um modelo da lista.')
+            consent=self._consent_id(key)
+            if self._gemini_consent!=consent:
+                text=(f'Modelo escolhido: {consent[0]}\nPesquisa Google: {"ativada" if consent[1] else "desativada"}\n\n'
+                      'Depois de cada análise, o Radar enviará automaticamente ao Google as transcrições, horários e critérios de até 20 candidatos. '
+                      'O Gemini comparará as falas e ordenará os melhores cortes. O vídeo e seu caminho não serão enviados.\n\n'
+                      'Validar a chave não confirma saldo nem gratuidade. Confira a cota/faturamento no AI Studio; o app não consegue impedir cobranças de um projeto com faturamento ativo. '
+                      'Não haverá troca automática de modelo nem repetição de uma chamada que falhar.\n\nAtivar Radar + Gemini nesta sessão?')
+                if not messagebox.askyesno('Ativar revisão automática das falas',text):return
+            save_settings({'gemini_model':consent[0],'gemini_search':consent[1]})
+            self._session_key=key
+            self._gemini_consent=consent
+            self.workflow_mode='gemini'
+            self._dismiss_gemini_failure()
+            self.workflow_status.set(f'Radar + Gemini ativo • {consent[0]} • revisão automática após a análise local.')
+            self._sync_controls()
+            if self._pending_review:self.retry_gemini()
+            else:
+                self.show_page('analysis' if self.media else 'video')
+                self.notify(self.workflow_status.get())
+        except Exception as exc:self.error(exc)
+
+    def _dismiss_gemini_failure(self):
+        if self._failure_dialog is not None:
+            self._failure_dialog.destroy()
+            self._failure_dialog=None
+
+    def use_radar_only(self):
+        if self.busy:return
+        self._dismiss_gemini_failure()
+        self.workflow_mode='radar'
+        if self._pending_review:
+            pending=self._pending_review
+            self.cuts=sorted(pending['cuts'],key=lambda c:c.score,reverse=True)[:pending['count']]
+            self.refresh()
+            if self.cuts:self.table.selection_set(str(self.cuts[0].id))
+            self.show_page('review');self.show_detail()
+        else:self.show_page('review' if self.cuts else 'analysis' if self.media else 'video')
+        self.workflow_status.set('Somente Radar nesta sessão. Não haverá revisão automática pelo Gemini; você pode retomá-la em Preferências.')
+        self.notify(self.workflow_status.get());self._sync_controls()
+
+    def wait_for_gemini(self):
+        self._dismiss_gemini_failure()
+        remaining=max(0,math.ceil(self._retry_at-time.monotonic()))
+        text=(f'O Google pediu espera de pelo menos {remaining} s. ' if remaining else 'O Google não informou quando o acesso será liberado. ')
+        text+='Os resultados locais estão preservados. Nenhuma chamada será feita enquanto você aguarda; clique em “Retomar fluxo” para tentar novamente.'
+        self.workflow_status.set(text);self.notify(text)
+        self._sync_controls()
+
+    def _gemini_failed(self,exc):
+        if self._closing:return
+        quota=isinstance(exc,GeminiError) and exc.status==429
+        delay=exc.retry_after if isinstance(exc,GeminiError) else 0
+        self._retry_at=max(self._retry_at,time.monotonic()+delay)
+        title='Limite de uso do Gemini' if quota else 'Gemini não concluiu esta etapa'
+        text=str(exc)+'\n\n'
+        if quota:text+='HTTP 429 indica limite de uso (requisições, tokens ou cota), não confirma cobrança. '
+        text+=('A lista de modelos não informa saldo nem garante gratuidade. Confira o projeto no AI Studio. '
+               'Os resultados locais foram preservados; nenhuma troca de modelo ou nova chamada será feita automaticamente.')
+        if delay:text+=f'\n\nO Google pediu espera mínima de {delay} segundos. Esse prazo não garante liberação da cota.'
+        self.workflow_status.set(title+'. Os resultados locais estão preservados.')
+        self.notify(self.workflow_status.get())
+        self._dismiss_gemini_failure()
+        self._failure_dialog=ui.gemini_failure(self,title,text)
+        self._sync_controls()
+        if self._retry_after_id is not None:self.after_cancel(self._retry_after_id)
+        self._retry_after_id=self.after(1000,self._update_retry_controls) if delay else None
+
+    def _update_retry_controls(self):
+        if self._closing:return
+        self._sync_controls()
+        self._retry_after_id=self.after(1000,self._update_retry_controls) if time.monotonic()<self._retry_at else None
+
+    def _accept_gemini_result(self,result):
+        self.ai_response=result
+        for review in result['reviews']:
+            ident=review['id']
+            self.ai_reviews[ident]=review
+            self.ai_signatures[ident]=result['input_signatures'][str(ident)]
+            self.ai_context[ident]={k:result[k] for k in ('model','created_at','sources','search_confirmed')}
+
+    def retry_gemini(self):
+        if self.busy:return
+        if not self._pending_review:return self.show_page('settings')
+        if time.monotonic()<self._retry_at:
+            return self.wait_for_gemini()
+        if not self._gemini_ready():return self.require_gemini_setup()
+        self._dismiss_gemini_failure()
+        pending=self._pending_review
+        if not any(cut_record(c,pending['speech'])['transcricao'].strip() for c in pending['cuts']):
+            return self._gemini_failed(GeminiError('Não há fala transcrita nos candidatos. Analise com tiny, base ou small para usar Radar + Gemini.'))
+        key=self._get_gemini_key()
+        model=self.gemini_model.get().strip();search=bool(self.gemini_search.get())
+        self.workflow_mode='gemini'
+        self.workflow_status.set(f'Radar concluiu a análise local. Gemini comparando as falas de {len(pending["cuts"])} candidatos…')
+        def done(result):
+            for cut in pending['cuts']:
+                if result['input_signatures'].get(str(cut.id))!=record_signature(cut_record(cut,self.speech)):
+                    return self._gemini_failed(GeminiError('Os cortes mudaram durante a revisão. Solicite uma revisão atualizada.'))
+            self._accept_gemini_result(result)
+            self.cuts=sorted(pending['cuts'],key=lambda c:(-self._valid_ai(c)['nota_editorial'],-c.score,c.start))[:pending['count']]
+            self._pending_review=None
+            self.refresh()
+            if self.cuts:self.table.selection_set(str(self.cuts[0].id));self.table.focus(str(self.cuts[0].id))
+            self.show_page('review');self.show_detail();self.review_tabs.select(2)
+            text=f'Radar + Gemini: {len(self.cuts)} sugestões escolhidas entre {len(pending["cuts"])} candidatos, por avaliação das falas.'
+            if result['search_requested'] and not result['search_confirmed']:text+=' Sem fontes de pesquisa confirmadas.'
+            self.workflow_status.set(text);self.notify(text)
+        self.work(lambda:GeminiClient(key).review(pending['media'],pending['cuts'],pending['speech'],model,search,self.cancel),done,
+                  message=self.workflow_status.get(),failed=self._gemini_failed,
+                  cancelled=lambda:self._gemini_failed(GeminiError('Revisão cancelada. Seus cortes locais foram mantidos.')))
+
     def review_gemini(self):
         if self.busy:return self.error('Aguarde ou cancele a operação atual antes de solicitar outra revisão.')
+        if self.workflow_mode=='setup':return self.show_page('settings')
         try:
             cuts=self.selected()
             key=self._get_gemini_key()
@@ -614,18 +807,13 @@ class App(tk.Tk):
                 self._gemini_consent=consent
             media,speech=self.media,list(self.speech)
             def done(result):
-                self.ai_response=result
-                for review in result['reviews']:
-                    ident=review['id']
-                    self.ai_reviews[ident]=review
-                    self.ai_signatures[ident]=result['input_signatures'][str(ident)]
-                    self.ai_context[ident]={k:result[k] for k in ('model','created_at','sources','search_confirmed')}
-                self.refresh();self.show_detail();self.review_tabs.select(2)
+                self._accept_gemini_result(result)
+                self.sort('potential');self.show_detail();self.review_tabs.select(2)
                 self.show_page('review')
                 if result['search_requested'] and not result['search_confirmed']:
                     self.notify('Revisão concluída; o Google não retornou fontes de pesquisa confirmadas.')
                 else:self.notify('Revisão Gemini concluída. Leia as justificativas e as limitações na aba Gemini.')
-            self.work(lambda:GeminiClient(key).review(media,cuts,speech,model,search,self.cancel),done,message='Gemini está revisando os cortes selecionados…')
+            self.work(lambda:GeminiClient(key).review(media,cuts,speech,model,search,self.cancel),done,message='Gemini está revisando os cortes selecionados…',failed=self._gemini_failed)
         except Exception as exc:
             if not self.gemini_model.get():self.show_page('settings')
             self.error(exc)
@@ -645,11 +833,15 @@ class App(tk.Tk):
         except Exception as exc:self.error(exc)
 
     def close(self):
+        self._closing=True
         self.cancel.set()
         if self.busy:
             self.status.set('Cancelando antes de fechar…')
             self.after(200, self.close)
             return
+        self.after_cancel(self._poll_after)
+        if self._retry_after_id is not None:self.after_cancel(self._retry_after_id)
+        self._dismiss_gemini_failure()
         for p in self.preview_processes:
             if p.poll() is None:
                 p.terminate()

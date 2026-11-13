@@ -153,8 +153,12 @@ def gemini_offline_smoke(folder):
         def open(self,request,timeout):
             assert key not in request.full_url
             assert request.get_header('X-goog-api-key')==key
-            content={'cortes':[{'id':1,'nota_editorial':70,'titulo':'Exemplo','justificativa':'Fala com contexto',
-                'sugestao_edicao':'Revisar o desfecho','limitacoes':'Sem vídeo e sem pesquisa'}]}
+            if request.get_method()=='GET':
+                return io.BytesIO(json.dumps({'models':[{'name':'models/gemini-smoke-flash',
+                    'supportedGenerationMethods':['generateContent']}]}).encode())
+            records=json.loads(json.loads(request.data)['contents'][0]['parts'][0]['text'])['cortes']
+            content={'cortes':[{'id':r['id'],'nota_editorial':70 if r['id']==1 else 95,'titulo':'Exemplo','justificativa':'Fala com contexto',
+                'sugestao_edicao':'Revisar o desfecho','limitacoes':'Sem vídeo e sem pesquisa'} for r in records]}
             return io.BytesIO(json.dumps({'candidates':[{'finishReason':'STOP','content':{'parts':[{'text':json.dumps(content)}]}}]}).encode())
     cut=Cut(1,0,20,45,'Título local','Teste','Olha como consegui terminar esta missão!')
     result=GeminiClient(key,Response()).review(Media('/not-sent.mp4',30,160,90,25,'h264',0,[],0),[cut],model='gemini-smoke-flash')
@@ -167,4 +171,44 @@ def gemini_offline_smoke(folder):
         assert store.load()==key and key.encode() not in store.path.read_bytes()
         store.delete()
         protected=True
-    return {'request_response':True,'local_times_preserved':True,'windows_dpapi':protected}
+    automatic_gemini_smoke(folder,lambda credential:GeminiClient(credential,Response()),key)
+    return {'request_response':True,'local_times_preserved':True,'windows_dpapi':protected,
+            'setup_required':True,'automatic_selection':True}
+
+
+def automatic_gemini_smoke(folder,client_factory,key):
+    """Exercise automatic selection inside the frozen app in an isolated profile."""
+    import time
+    from radar import gui
+    from radar.model import Media,Cut
+    previous=Path.cwd()
+    profile=folder/'gui-test-profile';profile.mkdir()
+    app=None
+    try:
+        os.chdir(profile)
+        with patch('radar.gui.GeminiClient',client_factory),patch('radar.gui.messagebox.askyesno',return_value=True):
+            app=gui.App()
+            assert app.current_page=='settings' and app.workflow_mode=='setup'
+            def finish():
+                deadline=time.monotonic()+15
+                while app.busy and time.monotonic()<deadline:
+                    app.update();time.sleep(.02)
+                assert not app.busy,'A revisão simulada não terminou'
+                app.update()
+            app.gemini_key_input.set(key)
+            app.connect_gemini();finish()
+            app.enable_gemini()
+            assert app.workflow_mode=='gemini'
+            media=Media('/not-sent.mp4',100,160,90,25,'h264',0,[],0)
+            cuts=[Cut(1,0,20,90,'Local 1','Teste'),Cut(2,40,60,45,'Local 2','Teste')]
+            speech=[{'start':1,'end':10,'text':'Primeira fala completa.','words':[]},
+                    {'start':41,'end':50,'text':'Segunda fala com desfecho.','words':[]}]
+            original=[(c.start,c.end,c.score,c.title) for c in cuts]
+            app.loaded(media);app._requested_count=1
+            app.results((media,cuts,speech,[]));finish()
+            assert [c.id for c in app.cuts]==[2],'O Gemini não participou da seleção final'
+            assert [(c.start,c.end,c.score,c.title) for c in cuts]==original
+            assert app._pending_review is None and app._valid_ai(app.cuts[0])['nota_editorial']==95
+    finally:
+        if app is not None:app.close()
+        os.chdir(previous)

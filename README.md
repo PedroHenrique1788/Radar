@@ -2,6 +2,8 @@
 
 Aplicativo desktop em português para revisar gravações longas de gameplay e localizar intervalos aproveitáveis. Processa localmente em CPU, oferece faixas OBS, análise sonora/visual, transcrição opcional, pontuação explicável, revisão manual e exportação. Não prevê viralização nem reconhece semanticamente acontecimentos de jogos.
 
+**Versão 0.3.0:** a interface pede a configuração inicial do Gemini e passa a comparar as falas automaticamente após a análise local. A versão 0.2.0 anterior usa revisão manual pelo botão.
+
 ## Instalação com assistente (recomendada)
 
 Baixe o arquivo **RadarCortes-Setup-…-Windows-x64.exe** na [página de versões](https://github.com/PedroHenrique1788/Radar/releases). Execute-o, conclua o assistente e abra **Radar de Cortes** no Menu Iniciar. A Área de Trabalho pode receber um atalho opcional. Não baixe “Source code” para esse modo de instalação.
@@ -21,16 +23,16 @@ As dependências de build estão em `packaging/requirements-build.txt`, entradas
 1. Instale **Python 3.12 de 64 bits** (3.11 também aceito) pelo [python.org](https://www.python.org/downloads/windows/). Inclua **Tcl/Tk**, pip e Python Launcher. Não use o Python embutido de outro aplicativo.
 2. Instale FFmpeg a partir dos links de builds Windows da [página oficial](https://ffmpeg.org/download.html). Extraia e adicione a pasta `bin` ao `PATH`; abra um novo terminal e confirme `ffmpeg -version`, `ffprobe -version` e `ffplay -version`. Se preferir, configure `FFMPEG_PATH`, `FFPROBE_PATH` e `FFPLAY_PATH` com os caminhos completos dos executáveis.
 3. Extraia/clone este projeto e dê duplo clique em **instalar.bat**. O instalador cria `.venv` e instala dependências gratuitas. Não exige CUDA ou uma chave de API.
-4. Abra **iniciar.bat**. O primeiro uso de um modelo de fala baixa seus pesos do Hugging Face; depois os arquivos ficam em cache. Esse download precisa de Internet. Escolha **off** para usar apenas áudio/imagem sem baixar modelos.
+4. Abra **iniciar.bat** e configure a chave/modelo Gemini conforme as instruções abaixo. O primeiro uso de um modelo de fala baixa seus pesos do Hugging Face; depois os arquivos ficam em cache. Esse download precisa de Internet. **off** só é aceito no modo somente Radar, pois a revisão do Gemini precisa de transcrição.
 
 Use `tiny` no i7-8565U com MX110; `base` ou `small` consomem mais tempo e memória. A MX110 não é exigida. O FFmpeg precisa de libx264 e codificador AAC, presentes nos builds usuais.
 
 ## Usar
 
-1. **Selecionar vídeo** (MP4, MKV, MOV ou AVI). Veja duração, resolução, FPS, codec e faixas disponíveis.
+1. Na primeira tela, informe sua chave Gemini, clique em **Validar e listar modelos**, escolha o modelo e clique em **Usar Radar + Gemini**. Autorize a revisão automática desta sessão após conferir sua cota no Google. Depois, **Selecionar vídeo** (MP4, MKV, MOV ou AVI).
 2. Escolha o microfone OBS para transcrição/análise sonora ou **Áudio completo (mix)**. A escolha afeta a análise; os MP4 exportados preservam todas as faixas de áudio.
-3. Configure quantidade (1–20, padrão 10) e duração (padrão 15–60 s). Clique em **Analisar vídeo**. A interface continua responsiva; **Cancelar** interrompe operações e remove temporários de processamento.
-4. Em **Revisar cortes**, clique em um resultado para ler a justificativa, os componentes da pontuação e a transcrição. Use **Por tempo** ou **Por potencial** para ordenar. Ctrl permite selecionar vários cortes.
+3. Configure quantidade (1–20, padrão 10) e duração (padrão 15–60 s). Clique em **Analisar vídeo**. O Radar prepara até o dobro da quantidade pedida, limitado a 20 candidatos. O Gemini compara as transcrições e escolhe a quantidade final pela nota editorial. Não é necessário clicar em outro botão para essa revisão. A interface continua responsiva; **Cancelar** preserva os resultados locais já concluídos.
+4. Em **Revisar cortes**, clique em um resultado para ler a justificativa, os componentes da pontuação e a transcrição. A aba **Gemini** mostra a avaliação das falas; a tabela usa o título sugerido pela IA sem substituir o título local no objeto do corte. **Por potencial** prioriza notas Gemini válidas e usa o score local nos cortes sem revisão. **Por tempo** ordena cronologicamente. Ctrl permite selecionar vários cortes.
 5. **Reproduzir** cria uma prévia temporária recodificada e abre FFplay. Os campos **Início no original** e **Fim no original** aceitam `HH:MM:SS.mmm`; clique em **Aplicar limites** para alinhar aos quadros originais. O score permanece o da análise anterior após ajustes manuais.
 6. **Copiar tempos**, exportar **JSON/CSV**, **SRT** ou **MP4**. O vídeo original é sempre protegido. Um MP4 existente só é substituído após confirmação e após concluir a nova exportação; relatórios e legendas usam destinos novos. Os MP4 mantêm resolução, proporção e faixas de áudio; não há conversão automática para 9:16.
 
@@ -97,9 +99,9 @@ Segunda etapa: análise semântica multimodal local e mensurada, avaliação em 
 
 ## Revisão pelo ChatGPT e API
 
-O botão **Copiar para ChatGPT** copia uma solicitação com os cortes selecionados, horários, transcrição e critérios locais. Cole o conteúdo numa conversa no ChatGPT e peça revisão de contexto e pesquisa de tendências, com fontes e datas. O arquivo de vídeo e seu caminho privado não são incluídos nesse texto. A revisão é manual e ocorre naquela conversa; o aplicativo não envia dados automaticamente.
+O botão **Copiar para ChatGPT** copia uma solicitação com os cortes selecionados, horários, transcrição e critérios locais. Cole o conteúdo numa conversa no ChatGPT e peça revisão de contexto e pesquisa de tendências, com fontes e datas. O arquivo de vídeo e seu caminho privado não são incluídos nesse texto. Esse botão apenas copia o texto; o envio e a revisão desse fluxo são manuais naquela conversa.
 
-**[ChatGPT Plus](https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus) e API têm cobranças separadas.** O Plus não fornece créditos para chamadas de API de um aplicativo externo. Além do fluxo manual sem chave, a versão 0.2.0 oferece revisão opcional pelo Gemini com chave própria, envio explícito dos trechos escolhidos e cota/cobrança sob controle do projeto Google. Pesquisa de tendências ajuda a embasar uma avaliação editorial, sem garantir viralização nem produzir probabilidades de engajamento não medidas.
+**[ChatGPT Plus](https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus) e API têm cobranças separadas.** O Plus não fornece créditos para chamadas de API de um aplicativo externo. Além da revisão manual no ChatGPT, o Gemini participa do fluxo com chave própria e autorização explícita antes de ativar a revisão automática. Cota/cobrança permanecem sob controle do projeto Google. Pesquisa de tendências ajuda a embasar uma avaliação editorial, sem garantir viralização nem produzir probabilidades de engajamento não medidas.
 
 ### Atualização 0.1.4
 
@@ -112,21 +114,26 @@ Após analisar com `tiny`, `base` ou `small`, selecione um corte e clique em **T
 
 Quando há tempos por palavra, os termos fora do corte são excluídos. Palavras parcialmente ouvidas nas bordas são sinalizadas para revisão. Se faltarem tempos por palavra, segmentos que atravessam os limites são omitidos com observação, evitando incluir frases externas como se pertencessem ao corte. Se não houver fala transcrita, o aplicativo explica o motivo e não cria um TXT vazio. **Exportar SRT** continua disponível para legendas com tempos relativos ao corte.
 
-## Interface CefasGamer e Gemini — 0.2.0
+## Interface CefasGamer e fluxo automático Gemini — 0.3.0
 
 A navegação agora segue quatro etapas: **Selecionar vídeo → Analisar → Revisar cortes → Exportar**. O azul foi indicado pelo proprietário do canal. Em **Preferências**, é possível ajustar nome/cor e carregar seu logotipo PNG. O monograma CG é apenas o padrão do aplicativo; não é uma cópia do logotipo do canal. O layout mantém as ações avançadas fora da tela principal. A imagem na prévia é um quadro de referência; **Reproduzir** abre o trecho com áudio no player FFplay.
 
-![Interface de desenvolvimento com vídeo sintético, sem dados pessoais](docs/interface-azul.png)
+![Interface real em desenvolvimento, com vídeo sintético e revisão Gemini simulada, sem chamada à API](docs/interface-azul.png)
 
 ### Configurar sua própria chave Gemini
 
 1. Em **Preferências → Gemini**, cole uma chave nova do Google AI Studio no campo protegido visualmente. Uma chave compartilhada em conversa deve ser revogada/substituída. Nenhuma chave pessoal acompanha este repositório ou o instalador.
 2. **Guardar chave** mantém a chave apenas na sessão. Se marcar **Salvar protegida para este usuário do Windows**, ela será cifrada com Windows DPAPI, no escopo do usuário atual, em `%LOCALAPPDATA%\RadarCortes\config\gemini_key.dpapi`. Ela não entra no JSON comum de preferências. No Linux, use a chave na sessão ou `GEMINI_API_KEY`; não há gravação de chave em texto puro. **Remover chave salva** apaga a cópia protegida e a chave da sessão; uma variável de ambiente configurada fora do app permanece sob controle do usuário.
-3. Clique em **Validar e listar modelos**, escolha um modelo disponível para sua conta e salve as preferências. A lista vem do Google, sem fixar um modelo que possa ser descontinuado.
-4. Volte a **Revisar cortes**, selecione os trechos e clique em **Revisar com Gemini**. A primeira solicitação daquela combinação de chave/modelo/pesquisa pede confirmação. Somente horários, transcrição e critérios locais dos trechos escolhidos são enviados; caminho privado e arquivo de vídeo ficam fora da requisição.
-5. Leia a aba **Gemini**. A nota editorial aparece separada da pontuação local. Limites, IDs e nota local não são alterados. Alterar limites/transcrição invalida a revisão daquela versão do corte. É possível salvar a revisão em JSON na etapa **Exportar**.
+3. Clique em **Validar e listar modelos** e escolha um modelo da sua conta. A lista vem do Google, sem fixar um modelo que possa ser descontinuado. Isso verifica acesso à lista, sem consultar saldo, preços, cota restante ou garantir que `generateContent` estará liberado.
+4. Clique em **Usar Radar + Gemini** e autorize o envio automático das falas dos candidatos após cada análise desta sessão. A navegação do desktop é liberada depois dessa configuração. Mesmo com chave protegida salva, cada nova sessão pede validação/ativação. Alterar chave, modelo ou pesquisa exige nova configuração antes da próxima análise automática.
+5. Analise normalmente. O Radar prepara até 20 candidatos; o Gemini compara as falas e ordena os melhores. A seleção final pode diferir da preferência da heurística local. Somente horários, transcrição e critérios locais dos candidatos são enviados; caminho privado e vídeo ficam fora da requisição. Há uma solicitação de revisão por análise, sem trocas de modelo ou repetições automáticas após erro.
+6. Leia a aba **Gemini**. A nota editorial aparece separada da pontuação local. Limites, IDs e nota local não são alterados. Alterar limites/transcrição invalida a revisão daquela versão do corte. **Revisar seleção** permite uma nova avaliação manual. É possível salvar a revisão em JSON na etapa **Exportar**.
 
-**Cota gratuita e faturamento são controlados pelo projeto no Google.** O app não ativa faturamento, não troca automaticamente de modelo e não repete uma solicitação após erro de cota. Limites/indisponibilidade/credenciais inválidas geram mensagem. Confira preços e cotas no AI Studio, especialmente antes de habilitar **Google Search**.
+Se a validação ou revisão falhar, o aplicativo oferece **Continuar só com o Radar**, **Aguardar e tentar depois** ou **Configurar Gemini**. O primeiro continua nesta sessão usando a classificação local; o segundo mantém os candidatos e transcrições em memória sem novas chamadas. **Retomar fluxo** repete somente a etapa Gemini, sem analisar novamente o vídeo. Se o Google enviar `Retry-After`, esse prazo é respeitado antes da tentativa manual; ele não garante liberação da cota. HTTP 429 indica limite de uso, enquanto erros de autorização e indisponibilidade têm mensagens distintas. Selecionar outro vídeo ou analisar novamente substitui os candidatos pendentes do vídeo anterior.
+
+Sem transcrição, o app oferece continuar localmente ou corrigir a análise e não chama a API. Sem candidatos, a revisão não é solicitada. Gemini compara o texto dos candidatos encontrados pelo Radar; não assiste ao vídeo inteiro nem corrige o reconhecimento do áudio.
+
+**Cota gratuita e faturamento são controlados pelo projeto no Google.** O app não consulta saldo nem consegue garantir uma chamada gratuita ou impedir cobranças de um projeto com faturamento ativo. Confira preços, cotas e faturamento pelo botão **Conferir cota no AI Studio**, especialmente antes de habilitar **Google Search**. O app não ativa faturamento, não troca automaticamente de modelo e não repete chamadas após erro.
 
 A pesquisa é opcional e desativada por padrão. Quando o Google retorna referências de grounding, o app mostra os links. Se não vierem referências, indica que não há pesquisa confirmada; não trata links inventados no texto como fontes verificadas. A avaliação continua editorial: contexto e tendências não garantem viralização. O fluxo **Copiar para ChatGPT** continua disponível para revisão manual sem integração de API.
 

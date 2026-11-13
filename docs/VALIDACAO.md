@@ -80,3 +80,20 @@ Nenhuma chave fornecida na conversa foi inserida em arquivos, comandos, logs, Gi
 O armazenamento persistente é opcional e usa DPAPI do usuário no Windows. Os testes Windows verificam cifrar, ler e remover uma credencial fictícia, inclusive no executável empacotado. O aplicativo também permite uso só em memória; no Linux a persistência é recusada explicitamente.
 
 **63 testes passaram em Linux** (23,72 s), com FilmCraft real e interface em Xvfb. Os 26 testes finais direcionados a GUI/Gemini também passaram após os últimos ajustes. A execução Windows [43131357231](https://github.com/PedroHenrique1788/Radar/actions/runs/43131357231), no commit `c698f74`, passou na suíte de código, no executável empacotado offline e na geração/instalação/teste/desinstalação do instalador. Isso inclui a prova nativa DPAPI com credencial fictícia, sem validar uma conta Google real.
+
+## Radar + Gemini automático — 0.3.0
+
+A interface agora inicia pela configuração da chave/modelo, exige validação nesta sessão e pede autorização antes de ativar a revisão automática. Depois da análise local, envia até o dobro da quantidade desejada (máximo 20 candidatos) para comparação das falas. A seleção final segue a nota editorial Gemini, preservando IDs, horários, títulos e notas dos objetos locais. A tabela pode mostrar o título sugerido pela IA; os dados originais continuam disponíveis no resumo/relatório local.
+
+**84 testes passaram em Linux, em 27,29 s**, com Python 3.12/Tk 9, Xvfb `:112`, FFmpeg e FilmCraft CLI oficial real. Foram verificados: bloqueio inicial até configuração; consentimento antes da automação; mudança efetiva da seleção pela avaliação das falas; envio de candidatos adicionais; preservação dos tempos; erro 429 e `Retry-After` numérico/data; limites do prazo; ausência de tentativas/trocas de modelo automáticas; espera e retomada sem repetir a análise local; modo somente Radar para esta sessão; erros de autorização e indisponibilidade; ausência de transcrição/candidatos sem chamada à API; cancelamento e fechamento antes do envio; troca de chave/modelo/pesquisa exigindo nova configuração. Os 46 testes direcionados a GUI/Gemini também passaram antes da inclusão do teste adicional de fechamento.
+
+Comando da suíte completa:
+
+```bash
+DISPLAY=:112 FILMCRAFT_CLI=/workspace/tools/filmcraft/bin/filmcraft-cli \
+  .venv/bin/python -m pytest -q --basetemp=/tmp/radar-hybrid-full-verified
+```
+
+As capturas atuais `interface-azul.png`, `gemini-configuracao.png` e `gemini-limite-simulado.png` foram feitas na aplicação real com Python do sistema/Tk 8.6 Linux. A revisão e o erro de cota nas capturas são explicitamente simulados. A prévia usa um vídeo sintético; a interface foi exercitada com o cliente REST real e transporte controlado, sem rede nem credencial válida.
+
+Essa suíte local não comprova execução no Windows, qualidade editorial em gameplay real ou acesso autenticado ao Google. A validação Windows 0.2.0 acima é histórica; a entrega 0.3.0 depende novamente dos testes nativos e do instalador no workflow. O teste do pacote agora também verifica configuração obrigatória e seleção automática via Gemini simulado, em um perfil temporário isolado que preserva as preferências reais. Listar modelos não consulta saldo/cota restante nem assegura uma chamada gratuita; essa limitação aparece antes da ativação. Nenhuma chave pessoal foi adicionada ao código, às capturas ou aos testes.
