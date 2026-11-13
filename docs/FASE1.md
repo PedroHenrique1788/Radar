@@ -51,7 +51,7 @@ Ctrl+C cancela e preserva checkpoints. Reexecute o mesmo comando para retomar. R
 - `export.py`, `model.py`: identificação dos originais, relatórios e fila MP4 recuperável.
 - Empacotamento Windows preservado, com teste do cache e do início local sem API no executável.
 
-Fase 2: áudio externo sincronizado, novos indicadores vocais/ritmo, frases configuráveis, fusão narrativa mais refinada e cortes por pausas/cenas validados. Fase 3: waveform/timeline, favoritos/classificação manual, novos cortes manuais, presets, exportação vertical 9:16, crop/fundo desfocado e organização de projetos. A cópia sem recodificação e suas limitações de keyframes também ficam pendentes. As exportações precisas existentes continuam recodificando; não se oferece “corte direto exato” fictício.
+A evolução da Fase 2 está descrita no [guia atual](FASE2.md): áudio externo com sincronização manual, indicadores vocais/ritmo, frases configuráveis, contexto lexical e limites por pausas/frases/amostras de cena. Fase 3: waveform/timeline, favoritos/classificação manual, novos cortes manuais, presets, exportação vertical 9:16, crop/fundo desfocado e organização de projetos. A cópia sem recodificação e suas limitações de keyframes também ficam pendentes. As exportações precisas existentes continuam recodificando; não se oferece “corte direto exato” fictício.
 
 Os testes são registrados em [VALIDACAO.md](VALIDACAO.md). Não foi medido desempenho em uma gravação real longa no i7-8565U/MX110; um vídeo sintético de 30 minutos valida lógica temporal e lotes, não velocidade ou qualidade em gameplay real.
 

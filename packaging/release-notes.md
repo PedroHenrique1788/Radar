@@ -1,36 +1,24 @@
-**Cefas Radar de Cortes 2.0 — Fase 1 / versão 0.4.1**, para **Windows 10/11 de 64 bits**.
+**Cefas Radar de Cortes 2.0 — Fase 2 / versão 0.5.0**, para **Windows 10/11 de 64 bits**.
 
-Baixe o arquivo **RadarCortes-Setup-…-Windows-x64.exe**, abra-o e siga o assistente. Depois abra **Radar de Cortes** pelo Menu Iniciar. O atalho na Área de Trabalho é opcional.
+Baixe **RadarCortes-Setup-0.5.0-Windows-x64.exe**, execute o assistente e abra **Radar de Cortes** pelo Menu Iniciar. Inclui Python, FFmpeg/FFprobe/FFplay e o modelo tiny CPU/int8; não exige chave, Ollama ou GPU. Base/small e FilmCraft são opcionais e separados.
 
-Inclui Python, FFmpeg/FFprobe/FFplay e o modelo de fala tiny em CPU. Não é preciso instalar Python nem baixar esse modelo na primeira abertura. Modelos maiores e FilmCraft são opcionais e separados.
+**Novidades da Fase 2**
 
-Os seus vídeos não são enviados a serviços de IA. Caches, logs e resultados ficam em `%LOCALAPPDATA%\RadarCortes`; desinstalar preserva esses dados. Projetos FilmCraft referenciam os vídeos e WAVs auxiliares: mantenha-os disponíveis.
+- Microfone externo para análise/transcrição, com ajuste manual positivo ou negativo em segundos e silêncio fora da cobertura. Faixas do OBS continuam disponíveis; uma única faixa nomeada como microfone é preferida.
+- Expressões personalizadas do canal, busca sem distinção de acentos/maiúsculas e sete pesos editáveis. Os sinais disponíveis têm os pesos normalizados.
+- Indicadores de variação de intensidade, pausas antes de expressões e mudança de palavras por segundo. O mix recebe confiança menor; sons do jogo não são atribuídos automaticamente ao criador.
+- Preparação/desfecho lexicais, limites próximos a pausas/frases/amostras de cena, proteção de palavras e verificação após alinhamento aos quadros reais.
+- Transcrições limitadas à cobertura física do microfone e recalculadas no intervalo final. Relatórios registram a fonte do áudio e seu ajuste.
+- Checkpoints independentes: trocar áudio/ajuste preserva imagem compatível; mudar expressões/pesos só reclassifica. Alteração do arquivo externo durante o trabalho interrompe com diagnóstico.
 
-O instalador ainda não tem certificado de assinatura de código; o Windows pode mostrar “editor desconhecido”. Confira a origem deste repositório e o SHA-256 publicado. Não desative o antivírus.
+Whisper começa em **off**. Escolha **tiny** ou **base** para ativar palavras, ritmo e contexto lexical. O áudio externo é usado somente na análise: MP4, prévia e projetos preservam as faixas originais do vídeo. Adicione o microfone no editor se ele não estiver no original. Sincronização é manual e não corrige deriva entre relógios.
 
-A pontuação é heurística, não uma previsão de viralização. Revise cortes e legendas antes de publicar.
+**Base preservada:** interface azul CefasGamer, perfil econômico CPU, limites configuráveis, métricas por etapa, pausa/cancelamento/retomada após reabrir, MP4 individual ou fila recuperável, JSON/CSV, transcrição TXT, SRT e projetos FilmCraft conjuntos/individuais. Vídeos originais e arquivos já existentes são preservados. Caches, logs e resultados ficam em `%LOCALAPPDATA%/RadarCortes`; desinstalar conserva esses dados.
 
+**Gemini continua opcional.** Após validar sua chave/modelo e ativar o modo, revisa automaticamente os textos candidatos. O vídeo não é enviado. Sua nota editorial fica separada do score local. Em erro/cota, escolha Radar local ou aguarde e tente depois; não há troca de modelo nem repetição automática. Validar a chave não consulta saldo nem garante gratuidade. Projetos Google com faturamento podem gerar cobrança; pesquisa opcional pode ter limites/custos próprios. Nenhuma chave pessoal é incluída; testes usam transporte controlado. ChatGPT Plus não inclui créditos de API.
 
-**Interface azul CefasGamer.** Navegação por etapas: selecionar vídeo, analisar, revisar cortes e exportar. Quadro de prévia, horários editáveis, falas e exportações organizadas. Nome, cor e logotipo PNG podem ser personalizados.
+A nota local é heurística. Não há reconhecimento confirmado de emoções, identidade vocal, acontecimentos do jogo ou chance de viralização. A precisão depende da transcrição; revise os trechos e legendas. Não houve benchmark no Lenovo i7-8565U/MX110. Timeline interativa, exportação vertical, presets e demais itens do estúdio permanecem na Fase 3.
 
-**Motor local confiável, sem API obrigatória.** O aplicativo abre diretamente para selecionar a gameplay. O perfil **Modo Econômico — Lenovo MX110** usa CPU, etapas sequenciais, limites de threads/memória e imagem em baixa resolução. Whisper começa desligado; tiny/base são opcionais e locais.
+O instalador ainda não possui certificado comercial de assinatura de código; o Windows pode mostrar editor desconhecido. Confira a origem e o SHA-256 publicado. A release só é criada após testes nativos do código, EXE, instalação, aplicativo instalado e desinstalação, incluindo fala real em português e áudio externo sincronizado.
 
-**Checkpoints por etapa e lote.** Pausar/retomar, cancelar e reabrir análises recentes preservam os lotes concluídos. Arquivo e configurações são revalidados antes de reutilizar o cache. Erros identificam a etapa; é possível continuar sem áudio/imagem ou sem transcrição opcional. O progresso é da etapa atual, com unidades, tempo, ETA quando houver dados e métricas aproximadas de CPU/RAM.
-
-**Pesos configuráveis e fila MP4 recuperável.** Sinais ausentes têm os pesos redistribuídos; os motivos mostram a composição da nota. A fila é sequencial, verifica SHA-256 de clipes prontos, retoma pendentes e preserva arquivos alterados pelo usuário. Relatórios incluem o identificador do original. Vertical 9:16, timeline/waveform e novos indicadores vocais ficam nas próximas fases.
-
-A versão 0.4.1 estabiliza a ordem cronológica da fila: reordenar os mesmos cortes na tabela antes de retomar não repete os clipes íntegros já concluídos.
-
-**Exportações preservadas:** MP4, transcrição TXT com horários originais, legendas SRT e projetos FilmCraft conjuntos ou individuais. A análise precisa ter transcrição de fala (tiny/base/small) para exportar TXT/SRT. O aplicativo confirma o destino dos arquivos e permite repetir projetos sem colidir com os anteriores.
-
-**Radar + Gemini no mesmo fluxo.**
-
-Gemini é opcional em **Preferências**: informe sua chave, valide os modelos e ative **Usar Radar + Gemini** se quiser a comparação automática das falas dos candidatos. Tiny é selecionado se a transcrição estiver desligada. Horários e scores locais são preservados; a avaliação editorial aparece separadamente. A chave pode ficar só na sessão ou ser salva com Windows DPAPI. O vídeo não é enviado.
-
-Se houver limite de uso ou falha, escolha **Continuar só com o Radar** ou **Aguardar e tentar depois**. Os candidatos locais são preservados. **Retomar fluxo** repete apenas a etapa Gemini, sem analisar o vídeo novamente. O app respeita a espera informada pelo Google e não troca de modelo nem repete chamadas automaticamente após erro.
-
-**Validar a chave não informa saldo nem garante gratuidade.** Confira cota e faturamento no AI Studio. Um projeto com faturamento ativo pode gerar cobranças; o aplicativo não consegue impedi-las. Pesquisa Google é opcional, desligada por padrão, e pode ter cota/custo próprio.
-
-Os testes de integração de API usam respostas controladas e não validam sua chave real. Use **Validar e listar modelos** após configurar uma chave nova. A gratuidade depende do seu projeto Google.
-
-**Copiar para ChatGPT** continua disponível para revisão manual. ChatGPT Plus não inclui créditos de API.
+Guia e comandos: [Fase 2](https://github.com/PedroHenrique1788/Radar/blob/main/docs/FASE2.md).

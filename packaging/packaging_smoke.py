@@ -64,11 +64,29 @@ def smoke():
         transcript_file=export_transcript(Cut(3,0,duration,50,'Fala de teste','Teste'),speech,tmp/'transcricao.txt')
         assert 'teste' in transcript_file.read_text(encoding='utf-8').lower()
         assert '00:00:00.000' in transcript_file.read_text(encoding='utf-8')
+        del model
+        # Phase 2 must work inside the real frozen app, not only in Python tests:
+        # analyze a silent video using the bundled Portuguese recording at +2.5s.
+        from radar.profiles import AnalysisOptions
+        external_video=tmp/'external-source.mp4'
+        run([tools['ffmpeg'],'-v','error','-f','lavfi','-i',
+             f'color=blue:s=160x90:r=25:d={duration+3.5}','-c:v','libx264',external_video])
+        external_media,external_cuts,external_speech,_=analyze(external_video,minimum=1,maximum=60,model='tiny',
+            cache_dir=tmp/'external-cache',options=AnalysisOptions(external_audio=str(spoken),external_offset=2.5,
+                                                                 visual=False,phrases='teste;vídeo'))
+        assert external_speech and external_cuts
+        assert min(s['start'] for s in external_speech)>=2.5
+        assert all(w['start']>=2.5 for s in external_speech for w in s.get('words',[]))
+        assert not external_media.audio and external_media.analysis_audio['offset']==2.5
+        assert 'teste' in ' '.join(s['text'] for s in external_speech).lower()
+        external_text=export_transcript(external_cuts[0],external_speech,tmp/'external-transcript.txt')
+        assert 'teste' in external_text.read_text(encoding='utf-8').lower()
         assert len(otio.schema.Timeline().tracks)==0
         gemini_result=gemini_offline_smoke(tmp)
     return {'tools': tools, 'gui': True, 'media_export': True, 'whisper_int8': True,
             'silence_vad': True, 'portuguese_transcript': text, 'otio': True,
             'portable_export':True, 'transcript_txt':True,'checkpoint_resume':True,'local_cpu_without_api':True,
+            'external_audio_sync':True,'speech_context':True,
             'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
 
 

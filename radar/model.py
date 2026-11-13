@@ -37,6 +37,7 @@ class Media:
     video_index: int
     variable_fps: bool = False
     source_id: str = ''
+    analysis_audio: dict = field(default_factory=dict)
 
 
 @dataclass

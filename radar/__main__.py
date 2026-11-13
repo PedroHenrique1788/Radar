@@ -13,6 +13,10 @@ def main():
     parser.add_argument('video', nargs='?')
     parser.add_argument('--model', default='off', help='off (local sem fala), tiny/base/small ou pasta local')
     parser.add_argument('--track', default='mix', help='mix ou índice global da faixa')
+    parser.add_argument('--external-audio',default='',help='Áudio separado usado somente na análise/transcrição')
+    parser.add_argument('--audio-offset',type=float,default=0.,help='t_vídeo = t_áudio + ajuste; positivo se o microfone começou depois')
+    parser.add_argument('--audio-role',choices=['auto','microphone','mixed'],default='auto')
+    parser.add_argument('--phrases',help='Expressões personalizadas separadas por ponto e vírgula; vazio desliga a busca lexical')
     parser.add_argument('--count', type=int, default=10)
     parser.add_argument('--min', type=float, default=15)
     parser.add_argument('--max', type=float, default=60)
@@ -36,7 +40,10 @@ def main():
     try:
         options=AnalysisOptions(threads=args.threads,max_processes=args.max_processes,memory_mb=args.memory_mb,
             sample_fps=args.sample_fps,visual_width=args.visual_width,batch_seconds=args.batch_seconds,
-            audio=not args.no_audio,visual=not args.no_visual,before=args.before,after=args.after).validate()
+            audio=not args.no_audio,visual=not args.no_visual,before=args.before,after=args.after,
+            external_audio=args.external_audio,external_offset=args.audio_offset,audio_role=args.audio_role)
+        if args.phrases is not None:options.phrases=args.phrases
+        options.validate()
     except ValueError as exc:parser.error(str(exc))
     control=ExecutionControl(options)
     progress=lambda n,msg:print((f'{n:.1f}% da etapa ' if n is not None else '[atividade] ')+msg,flush=True)

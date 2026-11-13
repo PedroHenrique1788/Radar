@@ -100,14 +100,15 @@ def export_report(media, cuts, path,speech=None):
         for cut,record in zip(cuts,records):record['transcript']=' '.join(entry['text'] for entry in transcript_entries(cut,speech)[0])
     with path.open('x', encoding='utf-8-sig' if path.suffix.lower() == '.csv' else 'utf-8', newline='') as f:
         if path.suffix.lower() == '.csv':
-            fields = ['id', 'title', 'start_time', 'end_time', 'duration', 'score', 'category', 'reason', 'transcript', 'editing','source_id','source']
+            fields = ['id', 'title', 'start_time', 'end_time', 'duration', 'score', 'category', 'reason', 'transcript', 'editing','source_id','source','analysis_audio_path','analysis_audio_offset','analysis_audio_role']
             writer = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
             writer.writeheader()
             # Prevent spreadsheet formulas when transcript/title start with = + - @.
             for record in records:
+                record.update(analysis_audio_path=media.analysis_audio.get('path',''),analysis_audio_offset=media.analysis_audio.get('offset',0),analysis_audio_role=media.analysis_audio.get('role',''))
                 writer.writerow({k: ("'" + v if isinstance(v, str) and v.lstrip().startswith(('=', '+', '-', '@')) else v) for k, v in record.items()})
         else:
-            json.dump({'source': media.path,'source_id':media.source_id, 'time_reference': 'seconds from first original video frame',
+            json.dump({'source': media.path,'source_id':media.source_id,'analysis_audio':media.analysis_audio, 'time_reference': 'seconds from first original video frame',
                        'notice': 'Pontuação heurística; não é probabilidade de viralização.', 'cuts': records}, f, ensure_ascii=False, indent=2)
     return path
 

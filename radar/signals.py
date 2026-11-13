@@ -20,8 +20,17 @@ def sound_features(path, cancel=None,start=0,progress=lambda *a:None):
             x = np.frombuffer(raw, dtype='<i2').astype(np.float32) / 32768
             rms = float(np.sqrt(np.mean(x * x)))
             peak=float(np.max(np.abs(x)))
+            # Twenty-millisecond envelopes measure pauses/changes cheaply. They
+            # do not classify a sound as speech, laughter or a game character.
+            frame_size=max(1,round(w.getframerate()*.02))
+            frames=x[:len(x)//frame_size*frame_size].reshape(-1,frame_size)
+            envelope=np.sqrt(np.mean(frames*frames,axis=1)) if len(frames) else np.asarray([rms])
+            levels=20*np.log10(np.maximum(envelope,1e-6))
             values.append({'t':start+len(values),'rms':rms,'db':float(20*np.log10(max(rms,1e-6))),
-                           'peak_db':float(20*np.log10(max(peak,1e-6)))})
+                           'peak_db':float(20*np.log10(max(peak,1e-6))),
+                           'dynamic_db':float(np.percentile(levels,90)-np.percentile(levels,10)),
+                           'active_ratio':float(np.mean(levels>-45)),
+                           'onsets':int(np.count_nonzero(np.diff(levels)>8))})
             progress(min(w.getnframes()/w.getframerate(),len(values)))
     return values
 

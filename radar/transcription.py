@@ -6,6 +6,25 @@ from .media import check_cancel, Cancelled
 from .runtime import resolve_model
 
 
+def constrain_speech(segments,start,end):
+    """ASR timestamps are estimates; do not place words in padded silence."""
+    result=[]
+    for original in segments:
+        if original['end']<=start or original['start']>=end:continue
+        segment={**original,'start':max(start,original['start']),'end':min(end,original['end'])}
+        if original.get('words'):
+            words=[{**w,'start':max(start,w['start']),'end':min(end,w['end'])}
+                   for w in original['words'] if w['end']>start and w['start']<end]
+            if not words:continue
+            segment['words']=words
+            segment['text']=' '.join(w['word'].strip() for w in words)
+        elif original['start']<start or original['end']>end:
+            # Without word times, a partial sentence cannot be isolated safely.
+            continue
+        result.append(segment)
+    return result
+
+
 def transcribe(path, model_name='tiny', cancel=None, progress=lambda *a: None, model_factory=None,*,threads=None,checkpoint=None):
     """Five-minute WAV chunks bound faster-whisper's decoded audio memory."""
     check_cancel(cancel)

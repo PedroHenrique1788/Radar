@@ -10,13 +10,15 @@ import time
 
 from .media import probe,extract_audio,align_bounds,check_cancel,Cancelled,executable
 from .signals import sound_features,visual_features
-from .transcription import transcribe
+from .transcription import transcribe,constrain_speech
 from .candidates import generate
 from .model import Cut,Media
 from .profiles import AnalysisOptions
 from .control import ExecutionControl
 from .checkpoints import CheckpointStore,StageError,STAGES,signature
 from .runtime import resolve_model
+from .audio_source import probe_audio,extract_external,audio_role
+from .intelligence import SpeechIndex
 
 
 def _valid_audio(path,record):
@@ -78,12 +80,22 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
             media.source_id=store.source_id
             if metadata is None:store.save('identify',key,asdict(media))
             check_cancel(control)
-            if track!='mix' and int(track) not in [a['index'] for a in media.audio]:raise ValueError('Faixa de áudio inexistente.')
+            external=probe_audio(opts.external_audio,control) if opts.external_audio else None
+            if external:
+                store.dependencies['external_audio']=external['source']
+                if opts.external_offset>=media.duration or opts.external_offset+external['duration']<=0:
+                    raise ValueError('O áudio externo não se sobrepõe ao vídeo com este ajuste de sincronização.')
+            elif track!='mix' and int(track) not in [a['index'] for a in media.audio]:raise ValueError('Faixa de áudio inexistente.')
+            media.analysis_audio={'kind':'external' if external else 'video','role':audio_role(media,track,opts),
+                                  'path':external['path'] if external else media.path,
+                                  'source_id':external['source_id'] if external else media.source_id,
+                                  'offset':opts.external_offset if external else 0.,'track':external['index'] if external else track,
+                                  'export_note':'MP4 preserva somente as faixas originais do vídeo.'}
             mark('identify',1,1,'complete');report('identify',1,1,'arquivo')
             batches=[(i,offset,min(opts.batch_seconds,media.duration-offset)) for i,offset in enumerate(range(0,math.ceil(media.duration),opts.batch_seconds))]
-            audio_key=signature(['audio-wav-v2',store.source_id,track,opts.batch_seconds,ffmpeg_stamp,media.origin,media.duration])
+            audio_key=signature(['external-wav-v1',external['source_id'],opts.external_offset,opts.batch_seconds,ffmpeg_stamp,media.duration]) if external else signature(['audio-wav-v2',store.source_id,track,opts.batch_seconds,ffmpeg_stamp,media.origin,media.duration])
             wavs={};extract_done=0
-            needs_audio=bool(media.audio) and (opts.audio or model!='off')
+            needs_audio=bool(external or media.audio) and (opts.audio or model!='off')
             for i,offset,duration in batches if needs_audio else []:
                 target=store.folder/'extract'/audio_key/f'{i:06}.wav'
                 if _valid_audio(target,store.load('extract',audio_key,i)):
@@ -98,8 +110,12 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
                 if shutil.disk_usage(target.parent).free<required:raise RuntimeError('Espaço livre insuficiente para o próximo lote de áudio e sua finalização. Libere espaço e retome esta etapa.')
                 temporary=target.with_suffix('.part.wav')
                 try:
-                    extract_audio(media,temporary,track,control,start=offset,duration=duration,
-                                  progress=lambda seconds:report('extract',extract_done+seconds,media.duration,'s'))
+                    if external:
+                        extract_external(external,temporary,opts.external_offset,control,start=offset,duration=duration,
+                                         progress=lambda seconds:report('extract',extract_done+seconds,media.duration,'s'))
+                    else:
+                        extract_audio(media,temporary,track,control,start=offset,duration=duration,
+                                      progress=lambda seconds:report('extract',extract_done+seconds,media.duration,'s'))
                     with wave.open(str(temporary),'rb') as audio:
                         if not audio.getnframes():raise RuntimeError('FFmpeg gerou um lote de áudio vazio.')
                     os.replace(temporary,target)
@@ -110,7 +126,7 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
                 mark('extract',extract_done,media.duration);report('extract',extract_done,media.duration,'s')
             mark('extract',extract_done,media.duration if needs_audio else 0,'complete' if needs_audio else 'skipped')
 
-            sound_key=signature(['sound-rms-peak-v2',audio_key])
+            sound_key=signature(['sound-envelope-v3',audio_key])
             sound_parts={i:store.load('audio',sound_key,i) for i,_,_ in batches if opts.audio and i in wavs}
             sound_done=sum(duration for i,_,duration in batches if sound_parts.get(i) is not None)
             start('audio',sound_key,media.duration if sound_parts else 0,sound_done,'s')
@@ -142,7 +158,9 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
             resolved=Path(resolve_model(model))
             weights_file=resolved/'model.bin'
             model_stamp=[str(resolved),weights_file.stat().st_size,weights_file.stat().st_mtime_ns] if weights_file.is_file() else model
-            speech_key=signature(['speech-v2',audio_key,model_stamp,'faster-whisper-1.2.1','pt','word_timestamps'])
+            speech_key=signature(['speech-v3-coverage' if external else 'speech-v2',audio_key,model_stamp,'faster-whisper-1.2.1','pt','word_timestamps'])
+            speech_start=max(0.,opts.external_offset) if external else 0.
+            speech_end=min(media.duration,opts.external_offset+external['duration']) if external else media.duration
             speech_parts={i:store.load('transcription',speech_key,i) for i,_,_ in batches if model!='off' and i in wavs}
             for i in list(speech_parts):
                 if speech_parts[i] is None and sound_parts.get(i) is not None and not any(point['db']>-50 for point in sound_parts[i]):
@@ -151,6 +169,7 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
             start('transcription',speech_key,len(speech_parts),sum(v is not None for v in speech_parts.values()))
             def transcribed(index,data):
                 check_cancel(control)
+                data=constrain_speech(data,speech_start,speech_end)
                 store.save('transcription',speech_key,data,index);speech_parts[index]=data
                 completed=sum(v is not None for v in speech_parts.values())
                 mark('transcription',completed,len(speech_parts));report('transcription',completed,len(speech_parts),'lotes')
@@ -166,9 +185,10 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
                     mark('transcription',sum(v is not None for v in speech_parts.values()),len(speech_parts),'failed',exc)
             elif model=='off':warnings.append('Transcrição desativada. Limites e contexto requerem revisão humana.')
             if not optional_failed:mark('transcription',len(speech_parts),len(speech_parts),'complete' if speech_parts else 'skipped')
-            speech=[segment for i in sorted(speech_parts) for segment in (speech_parts[i] or [])]
+            speech=constrain_speech([segment for i in sorted(speech_parts) for segment in (speech_parts[i] or [])],speech_start,speech_end)
+            speech_index=SpeechIndex(speech)
             check_cancel(control)
-            fusion_key=signature(['fusion-v1',sound_key if sound else None,visual_key if visual else None,
+            fusion_key=signature(['fusion-v3-coverage',sound_key if sound else None,visual_key if visual else None,
                                   speech_key,[(i,signature(v)) for i,v in sorted(speech_parts.items()) if v is not None]])
             start('fusion',fusion_key,1,unit='conjunto')
             fusion={'audio_points':len(sound),'visual_points':len(visual),'speech_segments':len(speech),
@@ -176,7 +196,8 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
             store.save('fusion',fusion_key,fusion)
             mark('fusion',1,1,'complete');report('fusion',1,1,'conjunto',moments=len(sound)+len(visual))
 
-            ranking_key=signature(['ranking-v3',fusion_key,count,minimum,maximum,opts.weights,opts.before,opts.after,ffprobe_stamp])
+            ranking_key=signature(['ranking-v4-context',fusion_key,count,minimum,maximum,opts.weights,opts.before,opts.after,
+                                   opts.phrases,media.analysis_audio['role'],ffprobe_stamp])
             start('classification',ranking_key,count,unit='sugestões')
             saved=store.load('classification',ranking_key)
             if saved is not None:
@@ -193,7 +214,21 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
                     if bounds is None:
                         bounds=align_bounds(media,cut.start,cut.end,control)
                         store.save('bounds',bounds_key,bounds)
+                    # A nearest-frame snap can enter a word by a few ms. Move
+                    # outward and verify again on actual PTS, including VFR.
+                    for _ in range(3):
+                        crossing=speech_index.crossings(*bounds)
+                        if not crossing:break
+                        a,b=bounds
+                        for unit in crossing:
+                            if unit['start']<a<unit['end']:a=max(0.,unit['start']-.5/media.fps)
+                            if unit['start']<b<unit['end']:b=min(media.duration,unit['end']+.5/media.fps)
+                        bounds=align_bounds(media,a,b,control)
+                    if speech_index.crossings(*bounds):continue
                     cut.start,cut.end=bounds
+                    # Recompute text after the final frame alignment; reports,
+                    # Gemini and the review panel see the same exact interval.
+                    cut.transcript=speech_index.text(cut.start,cut.end)
                     if minimum-1e-6<=cut.duration<=maximum+1e-6:
                         cut.id=len(aligned)+1;aligned.append(cut)
                     mark('classification',index+1,len(cuts));report('classification',index+1,len(cuts),'limites',candidates=len(cuts))

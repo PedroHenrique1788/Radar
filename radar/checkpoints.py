@@ -61,6 +61,7 @@ class CheckpointStore:
             'schema':SCHEMA,'source_id':self.source_id,'source':self.source,'stages':{}}
         self.active=None
         self._lock_file=None
+        self.dependencies={}
 
     def acquire(self):
         stream=(self.folder/'job.lock').open('a+b')
@@ -97,6 +98,9 @@ class CheckpointStore:
     def validate_source(self):
         if source_identity(self.source['path'])!=self.source:
             raise RuntimeError('O original mudou durante o processamento. Selecione o arquivo novamente; seus checkpoints anteriores permanecem separados.')
+        for identity in self.dependencies.values():
+            if source_identity(identity['path'])!=identity:
+                raise RuntimeError('O áudio externo mudou durante o processamento. Selecione-o novamente; os checkpoints independentes do vídeo foram preservados.')
 
     def save_manifest(self):
         self.manifest['updated_at']=time.time()

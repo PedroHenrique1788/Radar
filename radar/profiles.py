@@ -5,7 +5,10 @@ import os
 
 
 ECONOMY='Modo Econômico — Lenovo MX110'
-WEIGHTS={'gancho_fala':30.,'variação_sonora':25.,'atividade_visual':20.,'fala_completa':25.}
+LEGACY_WEIGHTS={'gancho_fala','variação_sonora','atividade_visual','fala_completa'}
+WEIGHTS={'gancho_fala':25.,'variação_sonora':15.,'atividade_visual':15.,'fala_completa':15.,
+         'reação_vocal':15.,'ritmo_fala':5.,'continuidade':10.}
+DEFAULT_PHRASES='meu deus\nolha isso\nque absurdo\nquase morri\nnão acredito\nconsegui\nconseguimos\ncuidado\nespera\nnossa\ncaramba\nfinalmente'
 
 
 @dataclass
@@ -22,8 +25,16 @@ class AnalysisOptions:
     before: float=5.
     after: float=10.
     weights: dict=field(default_factory=lambda:dict(WEIGHTS))
+    external_audio: str=''
+    external_offset: float=0.
+    audio_role: str='auto'
+    phrases: str=DEFAULT_PHRASES
 
     def validate(self):
+        # Existing saved profiles keep their four chosen weights. New signals
+        # receive their defaults; every available weight is then normalized.
+        if isinstance(self.weights,dict) and set(self.weights)==LEGACY_WEIGHTS:
+            self.weights={**WEIGHTS,**self.weights}
         if not isinstance(self.profile,str) or not 1<=len(self.profile)<=80:raise ValueError('Nome do perfil inválido.')
         if isinstance(self.threads,bool) or not isinstance(self.threads,int) or not 1<=self.threads<=max(1,min(16,os.cpu_count() or 1)):
             raise ValueError('Threads: escolha de 1 até o limite de CPUs lógicas (máximo 16).')
@@ -41,6 +52,17 @@ class AnalysisOptions:
             raise ValueError('Janelas de contexto: de 0 a 120 segundos.')
         if set(self.weights)!=set(WEIGHTS) or not all(isinstance(v,(int,float)) and not isinstance(v,bool) and math.isfinite(v) and 0<=v<=100 for v in self.weights.values()) or not sum(self.weights.values()):
             raise ValueError('Pesos: valores de 0 a 100, com pelo menos um maior que zero.')
+        if not isinstance(self.external_audio,str) or len(self.external_audio)>4096:
+            raise ValueError('Caminho do áudio externo inválido.')
+        if isinstance(self.external_offset,bool) or not isinstance(self.external_offset,(int,float)) or not math.isfinite(self.external_offset) or abs(self.external_offset)>86400:
+            raise ValueError('Sincronização do áudio: use segundos entre -86400 e 86400.')
+        if self.audio_role not in ('auto','microphone','mixed'):
+            raise ValueError('Origem do áudio: auto, microphone ou mixed.')
+        if not isinstance(self.phrases,str) or len(self.phrases)>8000:
+            raise ValueError('Use até 8000 caracteres nas expressões personalizadas.')
+        phrases=[p.strip() for p in self.phrases.replace(';','\n').splitlines() if p.strip()]
+        if len(phrases)>100 or any(len(p)>80 for p in phrases):
+            raise ValueError('Use até 100 expressões, com no máximo 80 caracteres cada.')
         return self
 
     def record(self):

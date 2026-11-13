@@ -1,6 +1,7 @@
 """Analysis controls added to the existing Tk desktop, independent of Gemini."""
 from pathlib import Path
 import tkinter as tk
+from tkinter import filedialog
 
 from .checkpoints import StageError,STAGES,latest_request,recent_jobs
 from .control import ExecutionControl
@@ -31,7 +32,7 @@ class AnalysisDesktop:
     def options_from_ui(self):
         raw={name:var.get() for name,var in self.option_vars.items()}
         for name in ('threads','max_processes','memory_mb','visual_width','batch_seconds'):raw[name]=int(raw[name])
-        for name in ('sample_fps','before','after'):raw[name]=float(str(raw[name]).replace(',','.'))
+        for name in ('sample_fps','before','after','external_offset'):raw[name]=float(str(raw[name]).replace(',','.'))
         raw['weights']={k:float(v.get().replace(',','.')) for k,v in self.weight_vars.items()}
         result=AnalysisOptions.from_record(raw)
         baseline=AnalysisOptions().record();actual=result.record()
@@ -56,9 +57,42 @@ class AnalysisDesktop:
 
     def economy_profile(self):
         if self.busy:return
-        self.apply_options(AnalysisOptions())
+        # Resource presets must not silently discard the selected microphone,
+        # synchronization or the channel's custom expressions.
+        current=self.options_from_ui()
+        self.apply_options(AnalysisOptions(external_audio=current.external_audio,external_offset=current.external_offset,
+                                           audio_role=current.audio_role,phrases=current.phrases))
         self.model.set('off')
         self.save_analysis_options()
+
+    def choose_external_audio(self):
+        if self.busy:return
+        path=filedialog.askopenfilename(title='Áudio separado do microfone',filetypes=[('Áudio','*.wav *.flac *.mp3 *.m4a *.ogg *.aac *.mkv'),('Todos','*.*')])
+        if path:
+            self.option_vars['external_audio'].set(str(Path(path).resolve()))
+            self.notify('Áudio externo selecionado. Confira o ajuste de sincronização antes de analisar.')
+
+    def clear_external_audio(self):
+        if self.busy:return
+        self.option_vars['external_audio'].set('');self.option_vars['external_offset'].set('0')
+        self.notify('A análise usará a faixa de áudio escolhida no vídeo.')
+
+    def reset_phrases(self):
+        if self.busy:return
+        from .profiles import DEFAULT_PHRASES
+        self.option_vars['phrases'].set(DEFAULT_PHRASES)
+
+    def phrase_edited(self,*_):
+        if self.phrase_editor.edit_modified():
+            self.option_vars['phrases'].set(self.phrase_editor.get('1.0','end-1c'))
+            self.phrase_editor.edit_modified(False)
+
+    def sync_phrase_editor(self,*_):
+        if not hasattr(self,'phrase_editor'):return
+        text=self.option_vars['phrases'].get()
+        if self.phrase_editor.get('1.0','end-1c')!=text:
+            self.phrase_editor.delete('1.0','end');self.phrase_editor.insert('1.0',text)
+            self.phrase_editor.edit_modified(False)
 
     def update_runtime(self):
         if self._closing:return
@@ -86,6 +120,8 @@ class AnalysisDesktop:
             self.notify('Pausa solicitada. Aguardando o limite da unidade atual; a interface continua disponível.')
 
     def load_analysis_state(self,media):
+        # An external recording belongs to this analysis, not every future video.
+        self.option_vars['external_audio'].set('');self.option_vars['external_offset'].set('0')
         record=latest_request(media.path)
         self._has_resume=bool(record)
         if record and isinstance(record.get('request'),dict):

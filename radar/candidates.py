@@ -1,12 +1,11 @@
 """Explainable local salience, indexed by time instead of rescanning the movie."""
 import bisect
-import re
 import numpy as np
 from .model import Cut,timestamp
 from .profiles import AnalysisOptions
 from .media import check_cancel
-
-HOOKS=re.compile(r'\b(meu deus|olha isso|que absurdo|quase morri|olha|como|por que|porque|quê|não acredito|consegui|conseguimos|cuidado|espera|agora|nossa|caramba|mano|quase|finalmente)\b',re.I)
+from .intelligence import SpeechIndex,PhraseMatcher,speech_evidence,context_bounds
+from .audio_source import audio_role
 
 
 def generate(media,sound,visual,speech,count=10,minimum=15.,maximum=60.,*,options=None,cancel=None,progress=lambda *a:None):
@@ -17,8 +16,17 @@ def generate(media,sound,visual,speech,count=10,minimum=15.,maximum=60.,*,option
     sound=sorted(sound if opts.audio else [],key=lambda p:p['t'])
     visual=sorted(visual if opts.visual else [],key=lambda p:p['t'])
     speech=sorted(speech,key=lambda p:p['start'])
+    role=media.analysis_audio.get('role') or audio_role(media,'mix',opts)
+    evidence=speech_evidence(sound,speech,role,opts.phrases,cancel)
+    evidence_starts=[e['start'] for e in evidence]
+    longest_evidence=max((e['end']-e['start'] for e in evidence),default=0.)
+    speech_index=SpeechIndex(speech)
+    matcher=PhraseMatcher(opts.phrases)
     available={'gancho_fala':bool(speech),'fala_completa':bool(speech),
-               'variação_sonora':bool(sound),'atividade_visual':bool(visual)}
+               'variação_sonora':bool(sound),'atividade_visual':bool(visual),
+               'reação_vocal':bool(sound) and (role=='microphone' or bool(speech)),
+               'ritmo_fala':sum(e['rate'] is not None for e in evidence)>=2,
+               'continuidade':bool(speech)}
     total=sum(opts.weights[k] for k in opts.weights if available[k])
     if not total:
         if not any(available.values()):return []
@@ -45,18 +53,14 @@ def generate(media,sound,visual,speech,count=10,minimum=15.,maximum=60.,*,option
         if index%200==0:check_cancel(cancel)
         if v['change']>.03 and visual_strength[index]>.15:
             events.setdefault(v['t'],{})['visual']=float(visual_strength[index])
-    for seg in speech:
-        hook=len(HOOKS.findall(seg['text']))
-        if hook or '?' in seg['text'] or '!' in seg['text']:
-            events.setdefault(seg['start'],{})['speech']=min(1.,.4+hook*.2)
+    contexts={}
+    for e in evidence:
+        if max(e['hook'],e['vocal'],e['rhythm'],e['continuity'])>.15:
+            events.setdefault(e['start'],{})['speech']=max(e['hook'],e['vocal'],e['rhythm'],e['continuity'])
+            contexts[e['start']]=e
     # Rank a bounded pool before expensive boundary/context work. All sampled
     # signals still participate in event detection; this is not video truncation.
     pool=sorted(events.items(),key=lambda item:sum(item[1].values()),reverse=True)[:min(1000,max(100,count*20))]
-    starts=[s['start'] for s in speech]
-    longest=max((s['end']-s['start'] for s in speech),default=0)
-    words=sorted((w for s in speech for w in s.get('words',[])),key=lambda w:w['start'])
-    word_starts=[w['start'] for w in words]
-    longest_word=max((w['end']-w['start'] for w in words),default=0)
     audio_strength=np.asarray(audio_strength,dtype=float)
 
     def window_max(times,values,a,b):
@@ -64,44 +68,42 @@ def generate(media,sound,visual,speech,count=10,minimum=15.,maximum=60.,*,option
         return float(np.max(values[lo:hi])) if hi>lo else 0.
 
     candidates=[]
-    for index,(t,signals) in enumerate(pool):
+    for number,(t,signals) in enumerate(pool):
         check_cancel(cancel)
-        start=max(0.,t-opts.before)
-        end=min(media.duration,start+min(maximum,max(minimum,30.,opts.before+opts.after)))
-        near=speech[bisect.bisect_left(starts,start-longest):bisect.bisect_right(starts,end)]
-        near=[s for s in near if s['end']>start and s['start']<end]
-        if near:
-            start=max(0.,min(start,near[0]['start']-.15))
-            end=min(media.duration,max(end,max(s['end'] for s in near)+.15))
-        if end-start>maximum:
-            start=max(start,min(t-opts.before,end-maximum))
-            end=min(media.duration,start+maximum)
-        if end-start<minimum:start=max(0.,end-minimum)
-        for w in words[bisect.bisect_left(word_starts,start-longest_word):bisect.bisect_right(word_starts,end)]:
-            if w['start']<start<w['end']:start=max(0.,w['start']-.05)
-            if w['start']<end<w['end']:end=min(media.duration,w['end']+.05)
-        if end-start>maximum:
-            end=start+maximum
-            overlapping=words[bisect.bisect_left(word_starts,end-longest_word):bisect.bisect_right(word_starts,end)]
-            for w in overlapping:
-                if w['start']<end<w['end']:end=w['start']
-        if not minimum-1e-6<=end-start<=maximum+1e-6 or not start<=t<=end:continue
-        text=' '.join(s['text'] for s in near if s['start']>=start and s['end']<=end)
+        event=contexts.get(t,{})
+        event_end=min(media.duration,event.get('end',t))
+        bounds=context_bounds(t,event_end,media,speech_index,sound,visual,minimum,maximum,opts,event.get('setup_start'),times=(st,vt))
+        if bounds is None:
+            progress(number+1,len(pool));continue
+        start,end=bounds
+        text=speech_index.text(start,end)
+        near_evidence=[e for e in evidence[bisect.bisect_left(evidence_starts,start-longest_evidence):bisect.bisect_right(evidence_starts,end)] if e['end']>start and e['start']<end]
         a=window_max(st,audio_strength,start,end)
         v=window_max(vt,visual_strength,start,end)
         # Raw game audio is not proof of a creator's emotional reaction.
         if not text and v<.1:a*=.6
-        hook=min(1.,.4+len(HOOKS.findall(text))*.2) if HOOKS.search(text) or '?' in text or '!' in text else 0.
+        matches=matcher.matches(text)
+        hook=min(1.,.45+len(matches)*.18) if matches else .35 if '?' in text or '!' in text else 0.
+        vocal=max((e['vocal'] for e in near_evidence),default=0.)
+        if role=='microphone' and not speech:vocal=a*.65
+        rhythm=max((e['rhythm'] for e in near_evidence),default=0.)
+        narrative=max((e['continuity'] if e['setup_start'] is None or e['setup_start']>=start else 0. for e in near_evidence),default=0.)
+        complete=min(1.,len(text.split())/20)*(.9 if text.endswith(('.', '!', '?')) else .6)
         strength={'gancho_fala':hook,'variação_sonora':a,'atividade_visual':v,
-                  'fala_completa':min(1.,len(text.split())/35)}
+                  'fala_completa':complete,'reação_vocal':vocal,'ritmo_fala':rhythm,'continuidade':narrative}
         components={k:round(weights[k]*strength[k],1) for k in weights}
         score=round(min(100.,sum(components.values())),1)
         if score>=18:
             reason='; '.join(f'{k.replace("_"," ")}: {value:g} pontos (peso efetivo {weights[k]:.1f}%)' for k,value in components.items() if weights[k])
+            if matches:reason+='; expressões: '+', '.join(matches[:8])
+            if vocal>.1:reason+='; possível variação vocal no microfone (estimativa)' if role=='microphone' else '; variação sonora durante fala no mix (origem incerta)'
+            if rhythm>.15:reason+='; mudança de ritmo medida por palavras/segundo'
+            if any(.4<=e['pause']<=3 and e['hook'] for e in near_evidence):reason+='; pausa antes da expressão'
+            if narrative>=.5:reason+='; preparação e desfecho lexicais preservados no intervalo'
             reason+='. Relevância interna estimada; contexto, emoção e eventos do jogo não confirmados.'
             title=text[:80] if text else f'Variação de sinais em {timestamp(t)}'
             candidates.append(Cut(0,start,end,score,title,reason,text,components=components))
-        progress(index+1,len(pool))
+        progress(number+1,len(pool))
     chosen=[]
     for cut in sorted(candidates,key=lambda c:(-c.score,c.start)):
         if all(max(0.,min(cut.end,c.end)-max(cut.start,c.start))/min(c.duration,cut.duration)<.35 for c in chosen):
