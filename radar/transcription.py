@@ -46,12 +46,28 @@ def transcribe(path, model_name='tiny', cancel=None, progress=lambda *a: None, m
         return result
     try:
         if isinstance(path,(list,tuple)):
-            for n,item in enumerate(path):
-                check_cancel(cancel)
-                current=decode(item['path'],item['start'])
-                if checkpoint:checkpoint(item['index'],current)
-                segments.extend(current)
-                progress(100*(n+1)/max(1,len(path)),f'Transcrição: {n+1}/{len(path)} lotes pendentes')
+            with tempfile.TemporaryDirectory(prefix='radar-speech-coverage-') as tmp:
+                for n,item in enumerate(path):
+                    check_cancel(cancel)
+                    file=item['path']
+                    # Artificial silence aligns acoustic features to the video,
+                    # but should not change the ASR input/context. Decode only
+                    # real microphone coverage and then add its video offset.
+                    if 'clip_start' in item:
+                        file=Path(tmp)/'coverage.wav'
+                        with wave.open(str(item['path']),'rb') as source,wave.open(str(file),'wb') as out:
+                            rate=source.getframerate();out.setparams(source.getparams())
+                            source.setpos(min(source.getnframes(),round(item['clip_start']*rate)))
+                            remaining=round(item['duration']*rate)
+                            while remaining>0:
+                                check_cancel(cancel)
+                                raw=source.readframes(min(remaining,32000))
+                                if not raw:break
+                                out.writeframes(raw);remaining-=len(raw)//(source.getsampwidth()*source.getnchannels())
+                    current=decode(file,item['start'])
+                    if checkpoint:checkpoint(item['index'],current)
+                    segments.extend(current)
+                    progress(100*(n+1)/max(1,len(path)),f'Transcrição: {n+1}/{len(path)} lotes pendentes')
             return segments
         with tempfile.TemporaryDirectory(prefix='radar-speech-') as tmp, wave.open(str(path),'rb') as source:
             chunk_path=Path(tmp)/'speech-chunk.wav'

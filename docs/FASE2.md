@@ -71,7 +71,7 @@ No instalador Windows: Menu Iniciar → **Radar de Cortes**. Pelo código-fonte:
 - `intelligence.py`, `candidates.py`: expressões, ritmo, pausas, indicadores vocais e limites de contexto indexados por tempo.
 - `profiles.py`, `pipeline.py`, `checkpoints.py`, `model.py`: parâmetros, proveniência, dependências e invalidação por etapa.
 - `desktop_analysis.py`, `ui.py`, `__main__.py`: controles no fluxo existente e CLI.
-- `signals.py`, `export.py`: envelopes leves e relatórios com fonte do áudio.
+- `signals.py`, `transcription.py`, `export.py`: envelopes leves, ASR restrito à cobertura real e relatórios com fonte do áudio.
 - `tests/test_phase2.py`, `packaging/packaging_smoke.py`: sincronização real, retomada independente, critérios e integração no aplicativo empacotado.
 
 Resultados e limitações dos ensaios estão em [VALIDACAO.md](VALIDACAO.md). Os exemplos sintéticos comprovam alinhamento e comportamento, não a qualidade editorial em gameplays reais. Nenhuma chave pessoal Gemini foi incluída ou consumida. O desempenho ainda não foi medido no Lenovo i7-8565U/MX110.

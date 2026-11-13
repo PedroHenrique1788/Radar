@@ -78,9 +78,11 @@ def smoke():
         assert min(s['start'] for s in external_speech)>=2.5
         assert all(w['start']>=2.5 for s in external_speech for w in s.get('words',[]))
         assert not external_media.audio and external_media.analysis_audio['offset']==2.5
-        assert 'teste' in ' '.join(s['text'] for s in external_speech).lower()
+        external_words=' '.join(s['text'] for s in external_speech).lower()
+        assert 'teste' in external_words,external_words
         external_text=export_transcript(external_cuts[0],external_speech,tmp/'external-transcript.txt')
-        assert 'teste' in external_text.read_text(encoding='utf-8').lower()
+        exported_words=external_text.read_text(encoding='utf-8').lower()
+        assert 'teste' in exported_words,exported_words
         assert len(otio.schema.Timeline().tracks)==0
         gemini_result=gemini_offline_smoke(tmp)
     return {'tools': tools, 'gui': True, 'media_export': True, 'whisper_int8': True,

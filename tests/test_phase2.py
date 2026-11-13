@@ -21,6 +21,8 @@ from radar.media import executable,probe,run
 from radar.model import Media,Cut
 from radar.profiles import AnalysisOptions,WEIGHTS
 from radar.transcription import constrain_speech
+from radar.transcription import transcribe
+from types import SimpleNamespace
 
 
 def wav(path,seconds=24,onset=6):
@@ -267,6 +269,38 @@ def test_asr_estimates_cannot_place_words_outside_external_audio_coverage():
     assert result[0]['text']=='palavra' and result[0]['words'][0]['start']==2.5
     assert result[0]['words'][0]['end']==6.5
     assert speech[0]['start']==2.1  # Cached/source objects are not mutated.
+
+
+def test_asr_decodes_real_coverage_without_padding_and_restores_video_offset(recording,tmp_path):
+    aligned=tmp_path/'aligned.wav'
+    extract_external(probe_audio(recording[1]),aligned,2.5,start=0,duration=28)
+    inspected=[]
+    class Model:
+        def __init__(self,*a,**kw):assert kw['device']=='cpu' and kw['compute_type']=='int8'
+        def transcribe(self,path,**kw):
+            x=samples(path);inspected.append(len(x))
+            assert len(x)==24*16000 and np.max(np.abs(x[:1000]))>0  # No artificial prefix.
+            assert np.sqrt(np.mean(x[6*16000:7*16000]**2))>.1
+            word=SimpleNamespace(start=.2,end=.5,word=' teste')
+            seg=SimpleNamespace(start=.2,end=.5,text='teste',words=[word],no_speech_prob=.1)
+            return iter([seg]),None
+    result=transcribe([{'index':0,'path':aligned,'clip_start':2.5,'duration':24,'start':2.5}],model_factory=Model)
+    assert inspected==[24*16000] and result[0]['start']==pytest.approx(2.7)
+    assert result[0]['words'][0]['end']==pytest.approx(3.)
+
+
+def test_pipeline_does_not_transcribe_batches_outside_real_microphone_coverage(recording,tmp_path,monkeypatch):
+    seen=[]
+    def speech(items,model,cancel,progress,**kw):
+        seen.extend(items)
+        for item in items:
+            kw['checkpoint'](item['index'],[{'start':item['start']+.2,'end':item['start']+1.,'text':'Consegui!','words':[]}])
+    monkeypatch.setattr(pipeline,'transcribe',speech)
+    opts=AnalysisOptions(external_audio=str(recording[1]),external_offset=20,batch_seconds=16,audio=False,visual=False)
+    result=pipeline.analyze(recording[0],minimum=1,maximum=8,model='tiny',options=opts,cache_dir=tmp_path)
+    assert len(seen)==1 and seen[0]['index']==1
+    assert seen[0]['start']==20 and seen[0]['clip_start']==4 and seen[0]['duration']==4
+    assert result[2] and result[2][0]['start']==pytest.approx(20.2)
 
 
 def test_custom_phrases_are_validated_and_legacy_profile_weights_migrate():

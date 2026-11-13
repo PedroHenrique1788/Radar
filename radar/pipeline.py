@@ -158,14 +158,23 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
             resolved=Path(resolve_model(model))
             weights_file=resolved/'model.bin'
             model_stamp=[str(resolved),weights_file.stat().st_size,weights_file.stat().st_mtime_ns] if weights_file.is_file() else model
-            speech_key=signature(['speech-v3-coverage' if external else 'speech-v2',audio_key,model_stamp,'faster-whisper-1.2.1','pt','word_timestamps'])
+            speech_key=signature(['speech-v4-real-coverage' if external else 'speech-v2',audio_key,model_stamp,'faster-whisper-1.2.1','pt','word_timestamps'])
             speech_start=max(0.,opts.external_offset) if external else 0.
             speech_end=min(media.duration,opts.external_offset+external['duration']) if external else media.duration
             speech_parts={i:store.load('transcription',speech_key,i) for i,_,_ in batches if model!='off' and i in wavs}
             for i in list(speech_parts):
-                if speech_parts[i] is None and sound_parts.get(i) is not None and not any(point['db']>-50 for point in sound_parts[i]):
+                offset=batches[i][1];duration=batches[i][2]
+                outside=external and (offset>=speech_end or offset+duration<=speech_start)
+                if speech_parts[i] is None and (outside or sound_parts.get(i) is not None and not any(point['db']>-50 for point in sound_parts[i])):
                     store.save('transcription',speech_key,[],i);speech_parts[i]=[]
-            pending=[{'index':i,'path':wavs[i],'start':offset,'duration':duration} for i,offset,duration in batches if i in speech_parts and speech_parts[i] is None]
+            pending=[]
+            for i,offset,duration in batches:
+                if i not in speech_parts or speech_parts[i] is not None:continue
+                item={'index':i,'path':wavs[i],'start':offset,'duration':duration}
+                if external:
+                    a=max(offset,speech_start);b=min(offset+duration,speech_end)
+                    item.update(start=a,duration=b-a,clip_start=a-offset)
+                pending.append(item)
             start('transcription',speech_key,len(speech_parts),sum(v is not None for v in speech_parts.values()))
             def transcribed(index,data):
                 check_cancel(control)
