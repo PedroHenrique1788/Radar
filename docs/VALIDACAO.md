@@ -1,6 +1,6 @@
 # Validação — 7 de novembro de 2026
 
-## Evolução 2.0, Fase 1 — 0.4.0
+## Evolução 2.0, Fase 1 — 0.4.1
 
 A auditoria partiu do commit `7764a97`, sem alterações pendentes. A suíte prévia passou com **84 testes em 23,81 s**. O novo motor preserva a API principal e usa checkpoints JSON por etapa/lote, perfil CPU, controle por `psutil` e a navegação Tkinter existente. O guia atual está em [FASE1.md](FASE1.md); as seções posteriores deste documento são registros históricos das entregas anteriores.
 
@@ -8,9 +8,15 @@ Na validação local final da Fase 1, **107 testes passaram em 41,72 s** com Pyt
 
 A CLI foi executada de ponta a ponta duas vezes sobre mídia sintética: a primeira analisou/exportou; a segunda reutilizou checkpoints e verificou o clipe sem recodificá-lo, preservando o relatório anterior e criando `report_2.json`. O teste auxiliar do pacote para Gemini também passou localmente com transporte controlado, confirmando início local sem API e manutenção da revisão opcional.
 
-Um vídeo sintético de **30 minutos**, 32×18 a 0,25 fps, valida lotes e timestamps de uma transição conhecida aos 15 minutos. Ele não representa custo de decodificação de uma gameplay 1080p/4K nem prova desempenho no i7-8565U/MX110. A amostra Windows de português e as integrações nativas continuam no workflow, que deve passar antes de liberar o instalador 0.4.0. Gemini é testado com respostas controladas; não há chave pessoal ou validação da cota real.
+Um vídeo sintético de **30 minutos**, 32×18 a 0,25 fps, valida lotes e timestamps de uma transição conhecida aos 15 minutos. Ele não representa custo de decodificação de uma gameplay 1080p/4K nem prova desempenho no i7-8565U/MX110. A amostra Windows de português e as integrações nativas continuam no workflow, que deve passar antes de liberar o instalador. Gemini é testado com respostas controladas; não há chave pessoal ou validação da cota real.
 
 Capturas da Fase 1 usam a aplicação real em Linux/Tk 8.6, vídeo sintético e análise local sem API, com métricas do ambiente de teste. Essas capturas não são medições do computador do usuário.
+
+### Validação Windows e entrega
+
+A release [0.4.1](https://github.com/PedroHenrique1788/Radar/releases/tag/v0.4.1), código `123ded3`, passou no workflow nativo [43476796828](https://github.com/PedroHenrique1788/Radar/actions/runs/43476796828): suíte de código, geração PyInstaller, teste do EXE offline, Inno Setup, instalação silenciosa por usuário, teste funcional do aplicativo instalado e desinstalação. O pacote verificou retomada dos checkpoints sem repetir extração/áudio/imagem, funcionamento local sem API, modelo tiny real CPU/int8 e amostra de português, MP4/TXT, FilmCraft oficial real e DPAPI. O fluxo Gemini usa transporte simulado.
+
+A primeira rodada Windows encontrou duas leituras sem `encoding='utf-8'` nos testes de JSON; foram corrigidas sem alterar a gravação UTF-8 do aplicativo. A versão 0.4.1 também estabiliza a fila cronologicamente para reutilizar clipes concluídos mesmo após reordenar a tabela. O teste da fila foi repetido com a seleção invertida e passou localmente; a suíte Windows completa validou essa alteração antes da publicação.
 
 ## Registro inicial, antes do instalador Windows
 
