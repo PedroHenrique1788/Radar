@@ -1,8 +1,10 @@
 # Cefas Radar de Cortes 2.0 — Fase 3: estúdio de revisão
 
-Versão **0.6.0**, sobre a Fase 2 existente. O envio ao GitHub e a publicação do instalador foram autorizados. O instalador só é liberado após os testes nativos do código, EXE, instalação, aplicativo instalado e desinstalação.
+Versão **0.6.0**, sobre a Fase 2 existente. O código, EXE, instalação, aplicativo instalado e desinstalação passaram na validação nativa Windows. O fluxo repete esses gates no pacote final antes de criar a release.
 
 ## Começar
+
+No Windows 10/11 x64, baixe o [instalador 0.6.0](https://github.com/PedroHenrique1788/Radar/releases/download/v0.6.0/RadarCortes-Setup-0.6.0-Windows-x64.exe), execute o assistente e abra Radar de Cortes no Menu Iniciar. Feche a versão anterior antes de instalar.
 
 Abra `iniciar.bat` depois de `instalar.bat`, ou execute:
 

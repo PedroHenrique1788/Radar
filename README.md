@@ -2,9 +2,9 @@
 
 Aplicativo desktop em português para revisar gravações longas de gameplay e localizar intervalos aproveitáveis. Processa localmente em CPU, oferece faixas OBS, análise sonora/visual, transcrição opcional, pontuação explicável, revisão manual e exportação. Não prevê viralização nem reconhece semanticamente acontecimentos de jogos.
 
-**Fase 3 — versão 0.6.0 em validação Windows:** timeline com ondas reais e prévia, favoritos/classificação, cortes manuais, projetos .radar.json e MP4 horizontal/vertical com recorte ou fundo desfocado, presets e legendas gravadas. A liberação do instalador depende da validação nativa completa. Veja o [guia da Fase 3](docs/FASE3.md).
+**Fase 3 — versão 0.6.0:** timeline com ondas reais e prévia, favoritos/classificação, cortes manuais, projetos .radar.json e MP4 horizontal/vertical com recorte ou fundo desfocado, presets e legendas gravadas. O código e o aplicativo instalado passaram na validação nativa Windows. Veja o [guia da Fase 3](docs/FASE3.md).
 
-A [Fase 2](docs/FASE2.md) mantém áudio externo com sincronização manual, expressões do canal, indicadores de intensidade/ritmo/pausas e contexto da fala. A base 0.5.0 passou nos testes Windows; o instalador 0.6.0 exige nova validação antes da publicação.
+A [Fase 2](docs/FASE2.md) mantém áudio externo com sincronização manual, expressões do canal, indicadores de intensidade/ritmo/pausas e contexto da fala. A versão 0.6.0 passou nos testes nativos do código, EXE, instalação, aplicativo instalado e desinstalação.
 
 A base da [Fase 1](docs/FASE1.md) permanece: motor local em CPU, sem chave/API obrigatória, checkpoints por etapa/lote, pausa/retomada, métricas reais e fila MP4 recuperável. Whisper e Gemini são opcionais. A [auditoria inicial](docs/AUDITORIA_2_0.md) registra a arquitetura anterior.
 

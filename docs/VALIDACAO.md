@@ -1,6 +1,6 @@
 # Validação
 
-## Evolução 2.0, Fase 3 — preparação 0.6.0 (13 de novembro de 2026)
+## Evolução 2.0, Fase 3 — 0.6.0 (13 de novembro de 2026)
 
 Base: commit `e2a0ec6`, sem alterações pendentes antes do trabalho. A suíte anterior passou com **131 testes em 96,81 s**. Também foi confirmado o resultado da execução Windows da Fase 2: [43489998486](https://github.com/PedroHenrique1788/Radar/actions/runs/43489998486), incluindo código, PyInstaller, EXE offline, instalação, teste instalado e desinstalação. Esse workflow produziu um artefato 0.5.0-dev; não publicou uma release.
 
@@ -17,6 +17,12 @@ Foi gerado um executável real com PyInstaller 6.16.0, usando a receita existent
 No executável congelado, o smoke passou pela interface, mídia/exportação, retomada, Whisper real CPU/int8, amostra portuguesa, VAD, áudio externo a +2,5 s, TXT/OTIO e FilmCraft oficial. O bloco novo `studio_roundtrip` concluiu MP4 720×1280 com legenda, áudio original, salvamento/reabertura, picos PCM, criação manual/favorito pela GUI e zoom da timeline.
 
 **O smoke global Linux não ficou verde:** depois do bloco do estúdio, o cliente Gemini sem rede falhou ao construir o contexto TLS no Python específico deste executor (`ssl.SSLContext`, `FileNotFoundError`). A construção do mesmo contexto no Python fonte funciona. Não foi usada uma chave real, a verificação TLS não foi desativada e o gate Windows completo foi mantido. Este ensaio não comprova o instalador Windows 0.6.0. O binário Linux é uma verificação local, não um pacote distribuível.
+
+### Validação nativa Windows 0.6.0
+
+A execução [43509894390](https://github.com/PedroHenrique1788/Radar/actions/runs/43509894390), no commit `55f67f2`, passou em todos os gates: suíte do código, geração PyInstaller, teste offline do EXE, Inno Setup, instalação silenciosa, teste funcional instalado e desinstalação. O novo bloco do estúdio confirmou MP4 vertical com legendas, preservação do áudio, projetos, ondas reais, criação manual, favorito e zoom da timeline. Whisper real, FilmCraft oficial, cliente Gemini sem rede e DPAPI também passaram. O erro TLS observado no Python Linux deste executor não se reproduziu no pacote Windows. Não houve chamada autenticada ao Google nem consulta de cota.
+
+Esta rodada gerou o instalador de validação 0.6.0-dev. A release oficial 0.6.0 repete esses mesmos gates sobre a tag antes de publicar o instalador, os checksums e o manifesto.
 
 ### Entrega e limites
 
