@@ -84,12 +84,61 @@ def smoke():
         exported_words=external_text.read_text(encoding='utf-8').lower()
         assert 'teste' in exported_words,exported_words
         assert len(otio.schema.Timeline().tracks)==0
+        studio_result=studio_roundtrip(media,tmp/'studio')
+        import gc
+        gc.collect()
         gemini_result=gemini_offline_smoke(tmp)
     return {'tools': tools, 'gui': True, 'media_export': True, 'whisper_int8': True,
             'silence_vad': True, 'portuguese_transcript': text, 'otio': True,
             'portable_export':True, 'transcript_txt':True,'checkpoint_resume':True,'local_cpu_without_api':True,
             'external_audio_sync':True,'speech_context':True,
-            'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
+            'studio':studio_result,'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
+
+
+def studio_roundtrip(media,folder):
+    """Real render, persistence and interactive editing from inside the package."""
+    import time
+    from radar.export import export_clip
+    from radar.media import probe
+    from radar.model import Cut
+    from radar.render import RenderOptions
+    from radar.projects import save_project,load_project
+    from radar.waveform import build_waveform
+    from radar.gui import App
+    folder.mkdir()
+    cut=Cut(1,.4,2.4,0,'Corte manual','Teste funcional',favorite=True,review_state='approved',manual=True,
+            framing={'crop_x':.3,'crop_y':.5})
+    speech=[{'start':.8,'end':1.5,'text':'CEFAS RADAR','words':[
+        {'start':.8,'end':1.1,'word':'CEFAS'},{'start':1.1,'end':1.5,'word':'RADAR'}]}]
+    opts=RenderOptions(mode='vertical_crop',preset='leve',burn_subtitles=True)
+    vertical=export_clip(media,cut,folder/'vertical.mp4',render_options=opts,speech=speech)
+    rendered=probe(vertical)
+    assert (rendered.width,rendered.height)==(720,1280) and abs(rendered.duration-2)<.05
+    assert len(rendered.audio)==len(media.audio)
+    project=save_project(folder/'studio.radar.json',media,[cut],speech,render=opts)
+    loaded=load_project(project)
+    assert loaded['cuts'][0].favorite and loaded['cuts'][0].manual and loaded['render'].burn_subtitles
+    wave=build_waveform(media,bins=64,cache_dir=folder/'cache')
+    assert wave['audio'] and any(wave['peaks'])
+    previous=Path.cwd();profile=folder/'profile';profile.mkdir();app=None
+    try:
+        os.chdir(profile);app=App();app.loaded(media);app.show_page('review');app.studio_tabs.select(1)
+        app.cut_start.set('00:00:00.400');app.cut_end.set('00:00:02.400');app.edit_title.set('Corte no pacote')
+        app.create_manual_cut()
+        deadline=time.monotonic()+20
+        while app.busy and time.monotonic()<deadline:app.update();time.sleep(.02)
+        assert not app.busy and app.cuts and app.cuts[0].manual
+        app.toggle_favorite();assert app.cuts[0].favorite
+        app.timeline.zoom(.5);assert app.timeline.view[1]-app.timeline.view[0]<media.duration
+        app.open_studio_project(str(project))
+        deadline=time.monotonic()+20
+        while app.busy and time.monotonic()<deadline:app.update();time.sleep(.02)
+        assert not app.busy and app.cuts[0].manual and app.cuts[0].favorite and app.rendering_from_ui().burn_subtitles
+    finally:
+        if app is not None:app.close()
+        os.chdir(previous)
+    return {'vertical_720x1280':True,'burned_subtitles':True,'original_audio_preserved':True,
+            'project_roundtrip':True,'real_waveform':True,'manual_cut_gui':True,'favorite_gui':True,'timeline_zoom':True}
 
 
 def filmcraft_roundtrip(media, folder):

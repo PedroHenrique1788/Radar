@@ -28,9 +28,10 @@ from . import ui
 from .export import transcript_entries
 from .desktop_analysis import AnalysisDesktop
 from .profiles import AnalysisOptions
+from .desktop_studio import StudioDesktop,STATES
 
 
-class App(AnalysisDesktop,tk.Tk):
+class App(StudioDesktop,AnalysisDesktop,tk.Tk):
     def __init__(self):
         super().__init__()
         prefs=read_settings()
@@ -78,6 +79,7 @@ class App(AnalysisDesktop,tk.Tk):
         self._retry_after_id=None
         self._closing=False
         self.init_analysis(prefs)
+        self.init_studio(prefs)
         self.ai_reviews={};self.ai_signatures={};self.ai_context={};self.ai_response=None
         ui.build(self)
         self.bind('<MouseWheel>',self._scroll_page,add='+')
@@ -101,6 +103,7 @@ class App(AnalysisDesktop,tk.Tk):
         if name not in pages:return
         self.current_page=name
         self.page_title.set(pages[name][0]);self.page_subtitle.set(pages[name][1])
+        self.refresh_project_header()
         for key,page in self.pages.items():
             if key==name:page.grid()
             else:page.grid_remove()
@@ -125,6 +128,7 @@ class App(AnalysisDesktop,tk.Tk):
         for b in self._cut_buttons:b.configure(state='normal' if ready and self.cuts and not self.busy else 'disabled')
         for b in self._config_buttons:b.configure(state='disabled' if self.busy else 'normal')
         self.next_analysis.configure(state='normal' if ready and self.media and not self.busy else 'disabled')
+        self.studio_open_button.configure(state='normal' if self.media and not self.busy else 'disabled')
         self.ai_export_button.configure(state='normal' if self.ai_response and not self.busy else 'disabled')
         self.resume_gemini_button.configure(state='normal' if self._pending_review and not self.busy and time.monotonic()>=self._retry_at else 'disabled')
         self.pause_button.configure(state='normal' if self.busy and not self._closing else 'disabled')
@@ -177,6 +181,8 @@ class App(AnalysisDesktop,tk.Tk):
             if not 0<=start<end<=self.media.duration:raise ValueError('Intervalo inválido no vídeo original.')
             def done(bounds):
                 cut.start,cut.end=bounds
+                cut.transcript=' '.join(e['text'] for e in transcript_entries(cut,self.speech)[0])
+                self.studio_changed()
                 cut.reason+=' Limites ajustados manualmente; pontuação local da análise original.'
                 self.ai_reviews.pop(cut.id,None);self.ai_signatures.pop(cut.id,None);self.ai_response=None
                 self.refresh();self.table.selection_set(str(cut.id));self.show_detail()
@@ -301,6 +307,7 @@ class App(AnalysisDesktop,tk.Tk):
         self.cuts, self.speech = [], []
         self.ai_reviews.clear();self.ai_signatures.clear();self.ai_context.clear();self.ai_response=None
         self._pending_review=None
+        self.studio_loaded(media)
         self.refresh()
         self.info.set(f'{timestamp(media.duration)} | {media.width}×{media.height} | FPS médio {media.fps:.3f} | {media.codec} | {len(media.audio)} faixas de áudio')
         self.track['values'] = ['Áudio completo (mix)'] + [f"Faixa {a['index']} — {a['codec']} {a['channels']} canais {a['language']} {a['title']}" for a in media.audio]
@@ -335,7 +342,22 @@ class App(AnalysisDesktop,tk.Tk):
             self.error(exc)
 
     def results(self, result):
+        previous={}
+        manual=[]
+        if self.media and self.media.source_id and self.media.source_id==result[0].source_id:
+            previous={(c.start,c.end):c for c in self.cuts if not c.manual}
+            manual=[c for c in self.cuts if c.manual]
         self.media, self.cuts, self.speech, warnings = result
+        used={c.id for c in manual}
+        next_id=max([c.id for c in self.cuts]+list(used)+[0])+1
+        for cut in self.cuts:
+            old=previous.get((cut.start,cut.end))
+            if old:
+                cut.favorite=old.favorite;cut.review_state=old.review_state;cut.framing=dict(old.framing)
+                if old.user_edited:cut.title=old.title;cut.editing=old.editing;cut.user_edited=True
+            if cut.id in used:cut.id=next_id;next_id+=1
+        self.cuts=self.cuts[:max(0,2000-len(manual))]+manual
+        self.studio_changed()
         self._pending_review=None
         self._has_resume=True
         self.refresh_jobs()
@@ -350,9 +372,10 @@ class App(AnalysisDesktop,tk.Tk):
         actionable=[warning for warning in warnings if not warning.startswith('Transcrição desativada.')]
         if actionable:
             messagebox.showwarning('Limitações da análise','\n'.join(actionable))
-        if self.workflow_mode=='gemini' and self.cuts:
-            self._pending_review={'media':self.media,'cuts':list(self.cuts),'speech':list(self.speech),'count':self._requested_count}
-            self.cuts=sorted(self.cuts,key=lambda c:c.score,reverse=True)[:self._requested_count]
+        if self.workflow_mode=='gemini' and any(not c.manual for c in self.cuts):
+            automatic=[c for c in self.cuts if not c.manual]
+            self._pending_review={'media':self.media,'cuts':automatic,'speech':list(self.speech),'count':self._requested_count,'manual_cuts':manual}
+            self.cuts=sorted(automatic,key=lambda c:c.score,reverse=True)[:self._requested_count]+manual
             self.refresh()
             self.retry_gemini()
         elif self.workflow_mode=='gemini':
@@ -365,18 +388,22 @@ class App(AnalysisDesktop,tk.Tk):
         selection = self.table.selection()
         self.table.delete(*self.table.get_children())
         for c in self.cuts:
+            choice=self.review_filter.get()
+            if choice=='Favoritos' and not c.favorite or choice=='Aprovados' and c.review_state!='approved' or choice=='Pendentes' and c.review_state!='pending':continue
             review=self._valid_ai(c)
-            self.table.insert('', 'end', iid=str(c.id), values=(c.id, timestamp(c.start), timestamp(c.end), f'{c.duration:.3f}', c.score, c.category, review['titulo'] if review else c.title, review['nota_editorial'] if review else '—'))
+            self.table.insert('', 'end', iid=str(c.id), values=(c.id, timestamp(c.start), timestamp(c.end), f'{c.duration:.3f}', '—' if c.manual else c.score, c.category, review['titulo'] if review else c.title, review['nota_editorial'] if review else '—','★' if c.favorite else '☆',next(k for k,v in STATES.items() if v==c.review_state)))
         self.table.selection_set([i for i in selection if self.table.exists(i)])
         self.cut_count.set('1 sugestão' if len(self.cuts)==1 else f'{len(self.cuts)} sugestões' if self.cuts else 'Nenhum corte ainda')
+        if self.cuts:self.cut_count.set(f'{len(self.table.get_children())}/{len(self.cuts)} cortes • {sum(c.favorite for c in self.cuts)} favoritos')
+        self.timeline.update_cuts(self.cuts)
         self._sync_controls()
 
     def sort(self, key):
-        attrs = {'id':'id', 'start':'start', 'end':'end', 'duration':'duration', 'score':'score', 'category':'category', 'title':'title'}
+        attrs = {'id':'id', 'start':'start', 'end':'end', 'duration':'duration', 'score':'score', 'category':'category', 'title':'title','favorite':'favorite','state':'review_state'}
         if key in ('ai','potential'):
             self.cuts.sort(key=lambda c:(self._valid_ai(c) is not None,self._valid_ai(c)['nota_editorial'] if self._valid_ai(c) else c.score),reverse=True)
         else:
-            self.cuts.sort(key=lambda c: getattr(c, attrs[key]), reverse=key == 'score')
+            self.cuts.sort(key=lambda c: getattr(c, attrs[key]), reverse=key in ('score','favorite'))
         self.refresh()
 
     def show_detail(self,event=None):
@@ -389,7 +416,12 @@ class App(AnalysisDesktop,tk.Tk):
                 self._preview_image=None
                 self._shown_preview_key=preview_key
             self.selected_score.set(f'Local: {cut.score:g}/100 • {cut.category}')
+            if cut.manual:self.selected_score.set('Corte manual • sem pontuação automática')
             self.cut_start.set(timestamp(cut.start));self.cut_end.set(timestamp(cut.end))
+            self.timeline.select_cut(cut)
+            self.edit_title.set(cut.title);self.edit_notes.set(cut.editing)
+            self.review_label.set(next(k for k,v in STATES.items() if v==cut.review_state))
+            for key,value in zip(('crop_x','crop_y'),self._preset_crop):self.render_vars[key].set(cut.framing.get(key,value))
             self._set_text(self.detail,f'{cut.title}\n\n{cut.reason}\n\nEdição: {cut.editing}\n\nTranscrição: {cut.transcript or "indisponível"}')
             entries,omitted,partial=transcript_entries(cut,self.speech)
             lines=[f"[{timestamp(e['start'])}] {e['text']}" for e in entries]
@@ -445,6 +477,7 @@ class App(AnalysisDesktop,tk.Tk):
                 raise ValueError('Intervalo inválido.')
             def done(bounds):
                 c.start, c.end = bounds
+                c.transcript=' '.join(e['text'] for e in transcript_entries(c,self.speech)[0]);self.studio_changed()
                 self.ai_reviews.pop(c.id,None);self.ai_signatures.pop(c.id,None);self.ai_response=None
                 c.reason += ' Limites ajustados manualmente; pontuação da análise original.'
                 self.refresh()
@@ -468,6 +501,7 @@ class App(AnalysisDesktop,tk.Tk):
             return self.error('Aguarde a operação atual antes de exportar.')
         try:
             c = self.selected(True)[0]
+            rendering=self.rendering_for_export()
             path = filedialog.asksaveasfilename(defaultextension='.mp4', initialfile=f'corte_{c.id:02}.mp4',
                 filetypes=[('Vídeo MP4', '*.mp4')], initialdir=str(self.last_output), confirmoverwrite=False)
             if path:
@@ -481,7 +515,7 @@ class App(AnalysisDesktop,tk.Tk):
                 def encoded(seconds):
                     self.cancel.report('Exportação',seconds,c.duration,'s')
                     self.events.put(('progress',(100*seconds/c.duration,'Exportando MP4 por timestamps originais…')))
-                self.work(lambda: export_clip(self.media,c,path,self.cancel,overwrite,encoded), done,
+                self.work(lambda: export_clip(self.media,c,path,self.cancel,overwrite,encoded,render_options=rendering,speech=self.speech), done,
                           message=f'Exportando MP4: {timestamp(c.start)} até {timestamp(c.end)}…')
         except Exception as exc:
             self.error(exc)
@@ -490,6 +524,7 @@ class App(AnalysisDesktop,tk.Tk):
         if self.busy:return
         try:
             cuts=self.selected()
+            rendering=self.rendering_for_export()
             folder=filedialog.askdirectory(title='Pasta da fila de MP4 (repita para retomar clipes pendentes)',initialdir=str(self.last_output))
             if not folder:return
             self.last_output=Path(folder)
@@ -498,7 +533,7 @@ class App(AnalysisDesktop,tk.Tk):
                 self.notify(f'{len(outputs)} clipes concluídos/verificados em {self.last_output}')
                 self.refresh_jobs()
                 messagebox.showinfo('Fila MP4 concluída',f'{len(outputs)} clipes concluídos/verificados.\nPasta: {self.last_output}\n\nRepetir a fila com os mesmos cortes e pasta reaproveita os arquivos íntegros já concluídos.')
-            self.work(lambda:export_clips(self.media,cuts,folder,self.cancel,progress=lambda n,msg:self.events.put(('progress',(n,msg)))),done,
+            self.work(lambda:export_clips(self.media,cuts,folder,self.cancel,progress=lambda n,msg:self.events.put(('progress',(n,msg))),render_options=rendering,speech=self.speech),done,
                       message='Preparando fila sequencial de MP4…',
                       cancelled=lambda:self.notify('Fila cancelada. Os clipes e checkpoints concluídos foram preservados; repita a fila na mesma pasta para retomar.'))
         except Exception as exc:self.error(exc)
@@ -530,12 +565,13 @@ class App(AnalysisDesktop,tk.Tk):
     def preview(self):
         try:
             c = self.selected(True)[0]
+            rendering=self.rendering_for_export()
             player = executable('ffplay')
             path = Path(self.preview_dir.name) / f'preview_{len(list(Path(self.preview_dir.name).iterdir()))}.mp4'
             def done(output):
                 self.preview_processes.append(start_process([player, '-autoexit', '-loglevel', 'error', str(output)]))
                 self.notify('Prévia temporária aberta no FFplay.')
-            self.work(lambda: export_clip(self.media, c, path, self.cancel), done)
+            self.work(lambda: export_clip(self.media, c, path, self.cancel,render_options=rendering,speech=self.speech), done)
         except Exception as exc:
             self.error(exc)
 
@@ -598,27 +634,7 @@ class App(AnalysisDesktop,tk.Tk):
                 self.error(exc)
 
     def load_preview_frame(self):
-        if self.busy:return
-        try:
-            cut=self.selected(True)[0]
-            key=(cut.id,cut.start,cut.end)
-            media=self.media
-            output=Path(self.preview_dir.name)/f'frame-{len(list(Path(self.preview_dir.name).iterdir()))}.png'
-            width=max(160,self.preview_label.winfo_width()-16)
-            height=max(90,self.preview_label.winfo_height()-10)
-            def extract():
-                from .media import run
-                run([executable('ffmpeg'),'-v','error','-nostdin','-y','-ss',cut.start,'-i',media.path,
-                     '-map',f'0:{media.video_index}','-frames:v','1','-vf',f'scale={width}:{height}:force_original_aspect_ratio=decrease',output],self.cancel,timeout=25)
-                return output
-            def done(path):
-                selected=self.selected(True)[0]
-                if (selected.id,selected.start,selected.end)!=key:return
-                self._preview_image=tk.PhotoImage(master=self,file=str(path))
-                self.preview_label.configure(image=self._preview_image,text='')
-                self.notify('Quadro de referência carregado. Reproduza o trecho para conferir áudio e contexto.')
-            self.work(extract,done,message='Carregando imagem do início do corte…')
-        except Exception as exc:self.error(exc)
+        return self.studio_preview_frame()
 
     def _get_gemini_key(self):
         value=self.gemini_key_input.get().strip() or self._session_key
@@ -817,7 +833,8 @@ class App(AnalysisDesktop,tk.Tk):
                 if result['input_signatures'].get(str(cut.id))!=record_signature(cut_record(cut,self.speech)):
                     return self._gemini_failed(GeminiError('Os cortes mudaram durante a revisão. Solicite uma revisão atualizada.'))
             self._accept_gemini_result(result)
-            self.cuts=sorted(pending['cuts'],key=lambda c:(-self._valid_ai(c)['nota_editorial'],-c.score,c.start))[:pending['count']]
+            self.cuts=sorted(pending['cuts'],key=lambda c:(-self._valid_ai(c)['nota_editorial'],-c.score,c.start))[:pending['count']]+pending.get('manual_cuts',[])
+            self.studio_changed()
             self._pending_review=None
             self.refresh()
             if self.cuts:self.table.selection_set(str(self.cuts[0].id));self.table.focus(str(self.cuts[0].id))
@@ -875,6 +892,7 @@ class App(AnalysisDesktop,tk.Tk):
 
     def close(self):
         self._closing=True
+        if self._seek_after is not None:self.after_cancel(self._seek_after);self._seek_after=None
         self.cancel.set()
         if self.busy:
             self.status.set('Cancelando antes de fechar…')

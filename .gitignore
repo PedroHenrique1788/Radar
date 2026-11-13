@@ -11,5 +11,7 @@ dist/
 bundle/
 build-tests.xml
 config/
+projetos/
+*.radar.json
 .env
 .env.*

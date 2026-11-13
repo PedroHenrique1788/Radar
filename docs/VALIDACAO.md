@@ -1,5 +1,29 @@
 # Validação
 
+## Evolução 2.0, Fase 3 — preparação 0.6.0 (13 de novembro de 2026)
+
+Base: commit `e2a0ec6`, sem alterações pendentes antes do trabalho. A suíte anterior passou com **131 testes em 96,81 s**. Também foi confirmado o resultado da execução Windows da Fase 2: [43489998486](https://github.com/PedroHenrique1788/Radar/actions/runs/43489998486), incluindo código, PyInstaller, EXE offline, instalação, teste instalado e desinstalação. Esse workflow produziu um artefato 0.5.0-dev; não publicou uma release.
+
+A Fase 3 passou na suíte completa com **150 testes em 124,07 s**, Python 3.12, FFmpeg real, FilmCraft oficial e Tk/Xvfb. Os 19 casos novos incluem dimensões dos quatro formatos, duração/áudio preservados, recortes esquerdo/direito conferidos por pixels, legenda visível somente durante as palavras do corte, texto literal sem alteração de posicionamento ASS, áudio atrasado com PTS inicial não zero no MP4 vertical, fila com reutilização e separação por preset, picos PCM e zoom com cache independente, silêncio/cancelamento, projetos com favoritos/revisão/falas/presets, reconexão de original movido, integridade e intervalos inválidos, falha de gravação mantendo o projeto anterior, exportação pela CLI sem análise e interação real da timeline.
+
+Após incluir a prévia pequena no painel Timeline e o indicador de alterações não salvas no cabeçalho, os **18 testes de interface passaram em 20,80 s**. O ensaio percorre Shift+arrastar, criação/alinhamento de um corte, favorito, aprovação, posição de enquadramento, leitura das ondas, prévia extraída por FFmpeg, salvamento/reabertura e preservação de cortes manuais e títulos/observações editados após nova análise. Também confere os botões nos painéis Timeline/Organizar em uma janela de 1000×620.
+
+Uma primeira rodada da suíte completa encontrou o Xvfb anterior encerrado: cinco testes GUI falharam e quatorze erros eram de conexão ao display. A rodada de 150 testes acima iniciou o display no mesmo processo de execução da suíte, com limpeza ao final, e passou. Nenhum erro de código foi mascarado ou teste GUI desativado.
+
+### Executável Linux para verificação local
+
+Foi gerado um executável real com PyInstaller 6.16.0, usando a receita existente, FFmpeg nativo e o modelo tiny incluído fisicamente. A receita passou a incluir explicitamente as bibliotecas Tcl/Tk encontradas no prefixo de um Python Linux standalone, pois elas não estavam nos caminhos usados pelo coletor automático. O preparo temporário também foi corrigido para copiar o modelo em vez de usar um link de diretório ignorado pelo coletor. A configuração e os hooks Windows continuam separados dessa condição Linux.
+
+No executável congelado, o smoke passou pela interface, mídia/exportação, retomada, Whisper real CPU/int8, amostra portuguesa, VAD, áudio externo a +2,5 s, TXT/OTIO e FilmCraft oficial. O bloco novo `studio_roundtrip` concluiu MP4 720×1280 com legenda, áudio original, salvamento/reabertura, picos PCM, criação manual/favorito pela GUI e zoom da timeline.
+
+**O smoke global Linux não ficou verde:** depois do bloco do estúdio, o cliente Gemini sem rede falhou ao construir o contexto TLS no Python específico deste executor (`ssl.SSLContext`, `FileNotFoundError`). A construção do mesmo contexto no Python fonte funciona. Não foi usada uma chave real, a verificação TLS não foi desativada e o gate Windows completo foi mantido. Este ensaio não comprova o instalador Windows 0.6.0. O binário Linux é uma verificação local, não um pacote distribuível.
+
+### Entrega e limites
+
+As alterações permanecem no rascunho local, respeitando a orientação de não publicar. Os arquivos de build foram preparados para 0.6.0-dev, e o smoke do pacote inclui as novas funções. Antes de disponibilizar um instalador Windows, é necessário autorizar o envio desta versão ao GitHub e passar novamente nos gates nativos do código, EXE, instalação, aplicativo instalado e desinstalação.
+
+As capturas do [guia da Fase 3](FASE3.md) mostram a aplicação real em Tk 8.6, mídia sintética, cortes criados manualmente, ondas lidas do arquivo e prévia vertical efetivamente renderizada. Não houve medição no Lenovo i7-8565U/MX110, avaliação editorial com gameplay real ou chamada Gemini autenticada. SRT/ASS dependem dos tempos da transcrição; fonte externa continua não sendo incorporada automaticamente ao áudio do MP4. Projetos não incluem cópias dos vídeos nem credenciais.
+
 ## Evolução 2.0, Fase 2 — 0.5.0 (13 de novembro de 2026)
 
 O trabalho partiu do commit `0157197`, sem alterações pendentes. Após reativar o Xvfb local e localizar o FilmCraft oficial, a base passou com **107 testes em 38,44 s**. Nenhuma dependência nova foi adicionada. O [guia da Fase 2](FASE2.md) descreve parâmetros, origem do áudio, retomada e limites.

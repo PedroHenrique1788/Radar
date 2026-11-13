@@ -49,7 +49,7 @@ def managed_process(args,cancel=None,**options):
         if acquired:control.slots.release()
 
 
-def run(args, cancel=None, timeout=None, env=None,progress=None,duration=None):
+def run(args, cancel=None, timeout=None, env=None,progress=None,duration=None,cwd=None):
     """Spool stderr/stdout to disk; never block a worker on full pipes."""
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err, tempfile.TemporaryDirectory(prefix='radar-process-') as tmp:
         check_cancel(cancel)
@@ -60,7 +60,7 @@ def run(args, cancel=None, timeout=None, env=None,progress=None,duration=None):
         progress_path=Path(tmp)/'progress.txt'
         if progress:args=[args[0],'-progress',progress_path,'-nostats',*args[1:]]
         last_progress=0.
-        with managed_process(args,cancel,stdout=out,stderr=err,**({'env':env} if env is not None else {})) as p:
+        with managed_process(args,cancel,stdout=out,stderr=err,**({'env':env} if env is not None else {}),**({'cwd':str(cwd)} if cwd is not None else {})) as p:
             while p.poll() is None:
                 check_cancel(cancel)
                 if timeout is not None and clock() - started > timeout:

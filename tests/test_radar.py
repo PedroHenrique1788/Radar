@@ -101,7 +101,8 @@ def test_reports_and_srt(movie, tmp_path):
     speech=[{'start':15, 'end':18,'text':'antes dentro','words':[
         {'start':15,'end':15.5,'word':' antes'}, {'start':17,'end':18,'word':' dentro'}]}]
     srt=export_srt(c,speech,tmp_path/'r.srt').read_text(encoding='utf-8')
-    assert '00:00:00,000 --> 00:00:02,000' in srt
+    # The retained word starts at original 17s, i.e. 1s inside this 16s cut.
+    assert '00:00:01,000 --> 00:00:02,000' in srt
     assert 'dentro' in srt and 'antes' not in srt
     with pytest.raises(ValueError): export_srt(c,[],tmp_path/'empty.srt')
 

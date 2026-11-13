@@ -51,6 +51,11 @@ class Cut:
     transcript: str = ''
     editing: str = 'Revise o contexto e as legendas antes de publicar.'
     components: dict = field(default_factory=dict)
+    favorite: bool = False
+    review_state: str = 'pending'
+    manual: bool = False
+    framing: dict = field(default_factory=dict)
+    user_edited: bool = False
 
     @property
     def duration(self):
@@ -58,6 +63,7 @@ class Cut:
 
     @property
     def category(self):
+        if self.manual:return 'Manual'
         return 'Alto potencial' if self.score >= 70 else 'Médio potencial' if self.score >= 45 else 'Baixo potencial'
 
     def validate(self, duration):

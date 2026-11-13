@@ -6,11 +6,23 @@ from .export import export_report,export_clips
 from .profiles import AnalysisOptions
 from .control import ExecutionControl,ResourceLimitError
 from .checkpoints import StageError
+from .render import RenderOptions
+from .projects import load_project,save_project
 
 
 def main():
     parser = argparse.ArgumentParser(description='Radar de Cortes — CefasGamer')
     parser.add_argument('video', nargs='?')
+    parser.add_argument('--project',help='Abrir projeto .radar.json para exportar/revisar cortes salvos, sem repetir a análise')
+    parser.add_argument('--save-project',help='Salvar revisão completa em um novo arquivo .radar.json')
+    parser.add_argument('--format',choices=['original','landscape','vertical-crop','vertical-blur'],default=None)
+    parser.add_argument('--resolution',type=int,choices=[720,1080],default=None)
+    parser.add_argument('--quality',choices=['leve','equilibrado','qualidade'],default=None)
+    parser.add_argument('--crop-x',type=float,default=None)
+    parser.add_argument('--crop-y',type=float,default=None)
+    parser.add_argument('--burn-subtitles',action=argparse.BooleanOptionalAction,default=None)
+    parser.add_argument('--only-favorites',action='store_true')
+    parser.add_argument('--only-approved',action='store_true')
     parser.add_argument('--model', default='off', help='off (local sem fala), tiny/base/small ou pasta local')
     parser.add_argument('--track', default='mix', help='mix ou índice global da faixa')
     parser.add_argument('--external-audio',default='',help='Áudio separado usado somente na análise/transcrição')
@@ -33,7 +45,7 @@ def main():
     parser.add_argument('--after',type=float,default=10)
     parser.add_argument('--export-dir',help='Exportar sugestões em fila; repetir pasta/parâmetros retoma clipes íntegros')
     args = parser.parse_args()
-    if not args.video:
+    if not args.video and not args.project:
         from .gui import App
         App().mainloop()
         return
@@ -48,9 +60,24 @@ def main():
     control=ExecutionControl(options)
     progress=lambda n,msg:print((f'{n:.1f}% da etapa ' if n is not None else '[atividade] ')+msg,flush=True)
     try:
-        media,cuts,speech,warnings=analyze(args.video,args.track,args.count,args.min,args.max,args.model,
-            cancel=control,options=options,progress=progress)
-        if args.export_dir:export_clips(media,cuts,args.export_dir,control,progress=progress)
+        rendering=RenderOptions()
+        if args.project:
+            saved=load_project(args.project,control,source_override=args.video)
+            media,cuts,speech,warnings=saved['media'],saved['cuts'],saved['speech'],[]
+            rendering=saved['render']
+        else:
+            media,cuts,speech,warnings=analyze(args.video,args.track,args.count,args.min,args.max,args.model,
+                cancel=control,options=options,progress=progress)
+        for name,value in [('mode',args.format.replace('-','_') if args.format else None),('resolution',args.resolution),('preset',args.quality),
+                           ('crop_x',args.crop_x),('crop_y',args.crop_y),('burn_subtitles',args.burn_subtitles)]:
+            if value is not None:setattr(rendering,name,value)
+        rendering.validate()
+        if args.save_project:
+            save_project(args.save_project,media,cuts,speech,analysis=saved['analysis'] if args.project else options,
+                         render=rendering,cancel=control,request=saved.get('request') if args.project else {'model':args.model,'track':args.track,'count':args.count,'minimum':args.min,'maximum':args.max})
+        if args.only_favorites:cuts=[c for c in cuts if c.favorite]
+        if args.only_approved:cuts=[c for c in cuts if c.review_state=='approved']
+        if args.export_dir:export_clips(media,cuts,args.export_dir,control,progress=progress,render_options=rendering,speech=speech)
         target=Path(args.output)
         if target.suffix.lower() in ('.json','.csv') and target.resolve()!=Path(media.path).resolve():
             base=target;version=1

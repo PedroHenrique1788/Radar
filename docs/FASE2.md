@@ -76,7 +76,7 @@ No instalador Windows: Menu Iniciar → **Radar de Cortes**. Pelo código-fonte:
 
 Resultados e limitações dos ensaios estão em [VALIDACAO.md](VALIDACAO.md). Os exemplos sintéticos comprovam alinhamento e comportamento, não a qualidade editorial em gameplays reais. Nenhuma chave pessoal Gemini foi incluída ou consumida. O desempenho ainda não foi medido no Lenovo i7-8565U/MX110.
 
-A Fase 3 continua pendente: timeline/waveform interativas, favoritos, novos cortes manuais, presets e exportação vertical/crop/fundo desfocado, legendas no vídeo e organização de projetos. SRT e ajustes dos cortes existentes continuam disponíveis.
+A evolução da Fase 3 está preparada no rascunho atual; veja o [guia do estúdio](FASE3.md): timeline/waveform, favoritos, cortes manuais, presets, exportação vertical, legendas no vídeo e projetos. SRT e ajustes dos cortes existentes continuam disponíveis. A publicação do instalador novo depende de validação Windows e autorização de publicação.
 
 ![Configuração real do microfone externo e ajuste manual no aplicativo](fase2-microfone.png)
 
