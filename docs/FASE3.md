@@ -1,6 +1,6 @@
 # Cefas Radar de Cortes 2.0 — Fase 3: estúdio de revisão
 
-Preparação da versão **0.6.0**, sobre a Fase 2 existente. Esta entrega está no rascunho local; não foi enviada ao GitHub nem publicada como release. A validação Windows da base 0.5.0 passou, mas os novos recursos precisam passar novamente nos testes Windows antes de um instalador 0.6.0 ser liberado.
+Versão **0.6.0**, sobre a Fase 2 existente. O envio ao GitHub e a publicação do instalador foram autorizados. O instalador só é liberado após os testes nativos do código, EXE, instalação, aplicativo instalado e desinstalação.
 
 ## Começar
 

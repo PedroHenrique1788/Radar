@@ -2,7 +2,7 @@
 
 Aplicativo desktop em português para revisar gravações longas de gameplay e localizar intervalos aproveitáveis. Processa localmente em CPU, oferece faixas OBS, análise sonora/visual, transcrição opcional, pontuação explicável, revisão manual e exportação. Não prevê viralização nem reconhece semanticamente acontecimentos de jogos.
 
-**Fase 3 — preparação da versão 0.6.0:** timeline com ondas reais e prévia, favoritos/classificação, cortes manuais, projetos .radar.json e MP4 horizontal/vertical com recorte ou fundo desfocado, presets e legendas gravadas. Este rascunho ainda não foi publicado. Veja o [guia da Fase 3](docs/FASE3.md).
+**Fase 3 — versão 0.6.0 em validação Windows:** timeline com ondas reais e prévia, favoritos/classificação, cortes manuais, projetos .radar.json e MP4 horizontal/vertical com recorte ou fundo desfocado, presets e legendas gravadas. A liberação do instalador depende da validação nativa completa. Veja o [guia da Fase 3](docs/FASE3.md).
 
 A [Fase 2](docs/FASE2.md) mantém áudio externo com sincronização manual, expressões do canal, indicadores de intensidade/ritmo/pausas e contexto da fala. A base 0.5.0 passou nos testes Windows; o instalador 0.6.0 exige nova validação antes da publicação.
 

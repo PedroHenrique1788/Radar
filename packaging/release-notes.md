@@ -1,6 +1,6 @@
-# Notas preparadas para 0.6.0 — Fase 3
+# Radar de Cortes 0.6.0 — Fase 3 / Windows x64
 
-Rascunho local, ainda não publicado. O instalador Windows desta versão depende de nova validação nativa e autorização para publicação.
+Baixe **RadarCortes-Setup-0.6.0-Windows-x64.exe**, execute o assistente e abra **Radar de Cortes** pelo Menu Iniciar. Inclui Python, FFmpeg/FFprobe/FFplay e tiny CPU/int8; não exige instalar Python ou baixar tiny na primeira abertura.
 
 O Cefas Radar de Cortes ganha um estúdio de revisão no mesmo aplicativo azul:
 
@@ -18,8 +18,8 @@ O MP4 preserva todas as faixas originais. O microfone externo continua sendo ape
 
 Cortes manuais não recebem nota automática. As notas locais e opiniões Gemini exigem revisão humana e não indicam probabilidade de viralização. Não há rastreamento automático de rosto ou ação. O desempenho não foi medido no Lenovo do usuário.
 
-A suíte local completa passou em 150 testes e os 18 testes de interface passaram após os ajustes visuais. O estúdio também concluiu suas verificações no EXE Linux local; o smoke global desse executor parou posteriormente no contexto TLS Gemini. O instalador Windows 0.6.0 ainda precisa de nova validação completa. Os testes Gemini usam respostas controladas; não há chave pessoal ou consulta de cota real.
+A suíte local completa passou em 150 testes e os 18 testes de interface passaram após os ajustes visuais. Esta release só é criada após a suíte nativa Windows, o teste offline do EXE, a instalação, o teste do aplicativo instalado e a desinstalação. A verificação inclui renderização vertical, legendas, projetos e fala real em português. Os testes Gemini usam respostas controladas; não há chave pessoal ou consulta de cota real.
 
-A futura distribuição Windows usa o mesmo AppId e pasta por usuário, mantendo caches/resultados/projetos separados do aplicativo instalado. Inclui Python, FFmpeg e tiny. O instalador ainda não possui certificado comercial de assinatura de código; confira a origem e o SHA-256 da release quando publicada.
+A distribuição Windows usa o mesmo AppId e pasta por usuário, mantendo caches/resultados/projetos separados do aplicativo instalado. Inclui Python, FFmpeg e tiny. O instalador ainda não possui certificado comercial de assinatura de código; confira a origem e o SHA-256 publicado.
 
-Guia: [Fase 3](https://github.com/PedroHenrique1788/Radar/blob/main/docs/FASE3.md) — o link estará disponível após o envio do código.
+Guia: [Fase 3](https://github.com/PedroHenrique1788/Radar/blob/main/docs/FASE3.md).

@@ -20,7 +20,7 @@ No executável congelado, o smoke passou pela interface, mídia/exportação, re
 
 ### Entrega e limites
 
-As alterações permanecem no rascunho local, respeitando a orientação de não publicar. Os arquivos de build foram preparados para 0.6.0-dev, e o smoke do pacote inclui as novas funções. Antes de disponibilizar um instalador Windows, é necessário autorizar o envio desta versão ao GitHub e passar novamente nos gates nativos do código, EXE, instalação, aplicativo instalado e desinstalação.
+Após a revisão local, o usuário autorizou enviar e publicar a versão com instalador. Os arquivos de build estão preparados para 0.6.0, e o smoke do pacote inclui as novas funções. A publicação continua condicionada aos gates nativos do código, EXE, instalação, aplicativo instalado e desinstalação.
 
 As capturas do [guia da Fase 3](FASE3.md) mostram a aplicação real em Tk 8.6, mídia sintética, cortes criados manualmente, ondas lidas do arquivo e prévia vertical efetivamente renderizada. Não houve medição no Lenovo i7-8565U/MX110, avaliação editorial com gameplay real ou chamada Gemini autenticada. SRT/ASS dependem dos tempos da transcrição; fonte externa continua não sendo incorporada automaticamente ao áudio do MP4. Projetos não incluem cópias dos vídeos nem credenciais.
 
