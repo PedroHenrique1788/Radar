@@ -30,10 +30,11 @@ from .desktop_analysis import AnalysisDesktop
 from .profiles import AnalysisOptions
 from .desktop_studio import StudioDesktop,STATES
 from .desktop_captions import CaptionDesktop
+from .desktop_workspace import WorkspaceDesktop
 from copy import deepcopy
 
 
-class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
+class App(WorkspaceDesktop,CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
     def __init__(self):
         super().__init__()
         prefs=read_settings()
@@ -83,14 +84,16 @@ class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
         self.init_analysis(prefs)
         self.init_studio(prefs)
         self.init_captions(prefs)
+        self.init_workspace()
         self.ai_reviews={};self.ai_signatures={};self.ai_context={};self.ai_response=None
         ui.build(self)
+        self.bind_workspace()
         self.bind('<MouseWheel>',self._scroll_page,add='+')
         self.bind('<Button-4>',self._scroll_page,add='+')
         self.bind('<Button-5>',self._scroll_page,add='+')
         self._load_logo()
         self._update_key_status()
-        self.show_page('video')
+        self.show_page('dashboard')
         self.refresh_jobs()
         self._sync_controls()
         self.protocol('WM_DELETE_WINDOW',self.close)
@@ -101,7 +104,10 @@ class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
         if getattr(self,'current_page',None)=='captions' and name!='captions':
             try:self.flush_captions()
             except ValueError as exc:self.error(exc);return
-        pages={'video':('Selecione sua gravação','Traga o vídeo. O Radar ajuda a encontrar momentos que merecem revisão.'),
+        pages={'dashboard':('Painel CefasGamer','Seus vídeos, clipes e projetos no mesmo estúdio.'),
+               'library':('Biblioteca de clipes','Encontre, compare e selecione os Shorts que quer finalizar.'),
+               'jobs':('Fila e atividade','Acompanhe o processamento local e retome trabalhos salvos.'),
+               'video':('Selecione sua gravação','Traga o vídeo. O Radar ajuda a encontrar momentos que merecem revisão.'),
                'analysis':('Prepare a análise','Escolha o áudio, a transcrição e a duração dos seus cortes.'),
                'review':('Revise os cortes','Veja os horários originais, ajuste os limites e decida o que exportar.'),
                'captions':('Estúdio de Legendas','Corrija falas, sincronize palavras e aplique o estilo do seu canal.'),
@@ -120,6 +126,7 @@ class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
         if name=='captions':
             try:self.enter_captions()
             except ValueError as exc:self.error(exc)
+        if name in ('dashboard','library','jobs'):self.refresh_workspace()
 
     def _scroll_page(self,event):
         page=self.pages.get(self.current_page)
@@ -149,6 +156,10 @@ class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
         self.resume_analysis_button.configure(state='normal' if self.media and self._has_resume and not self.busy else 'disabled')
         self.configure(cursor='watch' if self.busy else '')
         self.caption_picker.configure(state='disabled' if self.busy else 'readonly')
+        self.dashboard_analyze.configure(state='normal' if self.media and not self.busy else 'disabled')
+        self.workspace_pause.configure(state='normal' if self.busy and not self._closing else 'disabled')
+        self.library_select_button.configure(state='normal' if self.cuts and not self.busy else 'disabled')
+        self.sync_library_controls()
 
     def _set_text(self,widget,text):
         widget.configure(state='normal');widget.delete('1.0','end');widget.insert('end',text);widget.configure(state='disabled')
@@ -255,6 +266,8 @@ class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
         self.cancel.clear()
         self.cancel.begin(self.analysis_options)
         self.cancel.report(message,0,None)
+        self._workspace_operation=message;self.workspace_event(message)
+        self.update_workspace_runtime(self.cancel.snapshot())
         self._sync_controls()
         def worker():
             try:
@@ -279,11 +292,16 @@ class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
                     else:
                         self.progress.configure(mode='determinate');self.progress['value']=amount
                     self.status.set(msg)
+                    self.workspace_event(msg,progress=True)
                 else:
                     self.progress.stop()
                     self.progress.configure(mode='determinate')
                     self.busy = False
                     self.cancel.finish()
+                    outcome={'done':'Concluído','cancel':'Cancelado','error':'Falhou'}.get(kind,kind)
+                    self.workspace_event(outcome+' · '+self._workspace_operation)
+                    self._workspace_operation=''
+                    self.update_workspace_runtime(self.cancel.snapshot())
                     self._sync_controls()
                     if kind == 'done' and not self._closing:
                         callback, result = value
@@ -318,6 +336,7 @@ class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
 
     def loaded(self, media):
         self.reset_captions()
+        self.reset_workspace_media()
         self.media = media
         self.path.set(media.path)
         self.cuts, self.speech = [], []
@@ -414,6 +433,7 @@ class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
         if self.cuts:self.cut_count.set(f'{len(self.table.get_children())}/{len(self.cuts)} cortes • {sum(c.favorite for c in self.cuts)} favoritos')
         self.timeline.update_cuts(self.cuts)
         self.refresh_caption_clips()
+        self.refresh_workspace()
         self._sync_controls()
 
     def sort(self, key):
@@ -914,6 +934,7 @@ class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
 
     def close(self):
         self._closing=True
+        if self._library_after is not None:self.after_cancel(self._library_after);self._library_after=None
         if self._caption_after is not None:self.after_cancel(self._caption_after);self._caption_after=None
         if self._seek_after is not None:self.after_cancel(self._seek_after);self._seek_after=None
         self.cancel.set()

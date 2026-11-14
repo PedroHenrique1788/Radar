@@ -106,6 +106,7 @@ class AnalysisDesktop:
             f'CPU Radar (estimativa da máquina): {cpu} • RAM Radar + processos: {ram}\n'
             f'Pontos de sinal: {snapshot.get("moments","—")} • Candidatos avaliados: {snapshot.get("evaluated","—")} • Cortes: {snapshot.get("candidates","—")}')
         self.pause_text.set('Retomar' if snapshot['pause_requested'] else 'Pausar')
+        self.update_workspace_runtime(snapshot)
         if snapshot['paused']:self.progress.stop()
         self._monitor_after=self.after(500,self.update_runtime)
 
@@ -146,6 +147,7 @@ class AnalysisDesktop:
             source=record.get('source',{})
             stage=record.get('current_stage','identify')
             self.jobs_table.insert('','end',iid=str(index),values=(Path(source.get('path','')).name,statuses.get(record.get('status'),'Pendente'),STAGES.get(stage,stage)))
+        self.refresh_workspace_jobs()
 
     def open_recent_analysis(self):
         if self.busy:return

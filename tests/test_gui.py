@@ -182,7 +182,7 @@ def hybrid(tmp_path,monkeypatch):
 def test_local_startup_and_gemini_automatic_review_is_opt_in(hybrid,monkeypatch,tmp_path):
     from radar import gui
     app=hybrid.app
-    assert app.current_page=='video' and app.model.get()=='off'
+    assert app.current_page=='dashboard' and app.model.get()=='off'
     app.show_page('video')
     assert app.current_page=='video' and not app._nav_buttons['video'].instate(['disabled'])
     app.loaded(hybrid.media);app.count.set('1');app.analyze();hybrid.finish()

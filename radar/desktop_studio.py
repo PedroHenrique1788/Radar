@@ -204,6 +204,7 @@ class StudioDesktop:
         self.recent_projects=[str(path),*[p for p in self.recent_projects if p!=str(path)]][:8]
         save_settings({'recent_projects':self.recent_projects})
         self.project_picker['values']=self.recent_projects
+        self.refresh_workspace()
 
     def save_studio_project(self,save_as=False):
         if self.busy:return

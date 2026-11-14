@@ -52,13 +52,17 @@ def theme(app):
     style.configure('Brand.TLabel',background=SIDE,font=(FONT,14,'bold'))
     style.configure('BrandSmall.TLabel',background=SIDE,foreground=MUTED,font=(FONT,9))
     style.configure('Hero.TLabel',background=PANEL,font=(FONT,21,'bold'))
+    style.configure('Metric.TLabel',background=PANEL,font=(FONT,25,'bold'))
+    style.configure('MetricLabel.TLabel',background=PANEL,foreground=MUTED,font=(FONT,9))
+    style.configure('ClipTitle.TLabel',background=PANEL,font=(FONT,11,'bold'))
+    style.configure('LibraryCard.TFrame',background=PANEL,bordercolor=BORDER,borderwidth=1,relief='solid')
     style.configure('TButton',background='#1d3049',foreground=TEXT,borderwidth=0,padding=(12,8),relief='flat')
     style.map('TButton',background=[('active','#2b4463'),('disabled','#142033')],foreground=[('disabled','#71829a')])
     style.configure('Primary.TButton',background=accent,foreground=foreground,font=(FONT,10,'bold'))
     style.configure('Small.TButton',padding=(5,3),font=(FONT,9))
     style.map('Primary.TButton',background=[('active',accent),('disabled','#233852')],foreground=[('disabled','#71829a')])
-    style.configure('Nav.TButton',background=SIDE,anchor='w',padding=(10,12))
-    style.configure('NavActive.TButton',background='#163a60',foreground='#ffffff',anchor='w',padding=(10,12),font=(FONT,10,'bold'))
+    style.configure('Nav.TButton',background=SIDE,anchor='w',padding=(10,7))
+    style.configure('NavActive.TButton',background='#163a60',foreground='#ffffff',anchor='w',padding=(10,7),font=(FONT,10,'bold'))
     style.map('NavActive.TButton',background=[('active','#204d78')])
     style.configure('TEntry',fieldbackground='#0a1525',foreground=TEXT,insertcolor=TEXT,bordercolor=BORDER,padding=6)
     style.configure('TCombobox',fieldbackground='#0a1525',background='#1d3049',foreground=TEXT,padding=5,arrowsize=14)
@@ -135,17 +139,17 @@ def build(app):
     ttk.Button(footer,text='Cancelar',command=app.cancel.set).pack(side='right',padx=(10,0))
     shell=ttk.Frame(app)
     shell.pack(fill='both',expand=True)
-    sidebar=ttk.Frame(shell,style='Side.TFrame',width=204,padding=(12,22))
+    sidebar=ttk.Frame(shell,style='Side.TFrame',width=204,padding=(12,16))
     sidebar.pack(side='left',fill='y')
     sidebar.pack_propagate(False)
     app.logo_label=tk.Label(sidebar,text='CG',font=(FONT,24,'bold'),bg=app.accent,fg='white',width=4,height=1)
-    app.logo_label.pack(anchor='w',pady=(0,12))
+    app.logo_label.pack(anchor='w',pady=(0,8))
     app.brand_label=ttk.Label(sidebar,textvariable=app.channel,style='Brand.TLabel',wraplength=156)
     app.brand_label.pack(anchor='w')
-    ttk.Label(sidebar,text='RADAR DE CORTES',style='BrandSmall.TLabel').pack(anchor='w',pady=(3,26))
-    for key,label in [('video','1  Selecionar vídeo'),('analysis','2  Analisar'),('review','3  Revisar cortes'),('captions','Estúdio de Legendas'),('export','4  Exportar')]:
+    ttk.Label(sidebar,text='RADAR DE CORTES',style='BrandSmall.TLabel').pack(anchor='w',pady=(3,14))
+    for key,label in [('dashboard','Painel'),('video','Importar vídeo'),('analysis','Análise'),('library','Biblioteca de clipes'),('review','Editor de clipes'),('captions','Estúdio de Legendas'),('jobs','Fila e atividade'),('export','Exportar')]:
         b=ttk.Button(sidebar,text=label,style='Nav.TButton',command=lambda k=key:app.show_page(k))
-        b.pack(fill='x',pady=3)
+        b.pack(fill='x',pady=2)
         app._nav_buttons[key]=b
     ttk.Label(sidebar,text='Seu conteúdo.\nSua edição.',style='BrandSmall.TLabel').pack(side='bottom',anchor='w',pady=(16,0))
     b=ttk.Button(sidebar,text='Preferências',style='Nav.TButton',command=lambda:app.show_page('settings'))
@@ -162,13 +166,17 @@ def build(app):
     app.page_host.rowconfigure(0,weight=1)
     app.page_host.columnconfigure(0,weight=1)
     app.pages={}
-    for name in ('video','analysis','review','captions','export','settings'):
-        page=ttk.Frame(app.page_host) if name in ('review','captions') else ScrollPage(app.page_host)
+    for name in ('dashboard','video','analysis','library','review','captions','jobs','export','settings'):
+        page=ttk.Frame(app.page_host) if name in ('review','captions','jobs') else ScrollPage(app.page_host)
         page.grid(row=0,column=0,sticky='nsew')
         app.pages[name]=page
     build_video(app,app.pages['video'].content)
     build_analysis(app,app.pages['analysis'].content)
     build_review(app,app.pages['review'])
+    from .workspace_ui import build_dashboard,build_library,build_jobs
+    build_dashboard(app,app.pages['dashboard'].content)
+    build_library(app,app.pages['library'].content)
+    build_jobs(app,app.pages['jobs'])
     from .caption_ui import build as build_captions
     build_captions(app,app.pages['captions'])
     build_export(app,app.pages['export'].content)
