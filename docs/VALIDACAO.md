@@ -18,6 +18,8 @@ A execução nativa Windows [43533876172](https://github.com/PedroHenrique1788/R
 
 A CLI também reabriu o projeto real do Whisper, exportou MP4 com `--no-burn-subtitles` e salvou outro projeto: a ativação ficou desligada, mantendo todos os blocos e o estilo Karaokê para futura edição.
 
+A [release oficial 0.7.0](https://github.com/PedroHenrique1788/Radar/releases/tag/v0.7.0), tag no commit `80603e9`, passou novamente em todos os gates na execução [43534950520](https://github.com/PedroHenrique1788/Radar/actions/runs/43534950520). Código, EXE offline, instalação, aplicativo instalado, desinstalação e publicação foram aprovados. O instalador público foi baixado e verificado: PE Windows, **296982802 bytes**, SHA-256 **`5ef06c529280b8e37eb5f3d97a22e5e4cf2946c6f3b855d3b9753d8c263abb2b`**, idêntico ao `SHA256SUMS.txt` publicado. O manifesto de componentes também foi baixado e conferido.
+
 ## Evolução 2.0, Fase 3 — 0.6.0 (13 de novembro de 2026)
 
 Base: commit `e2a0ec6`, sem alterações pendentes antes do trabalho. A suíte anterior passou com **131 testes em 96,81 s**. Também foi confirmado o resultado da execução Windows da Fase 2: [43489998486](https://github.com/PedroHenrique1788/Radar/actions/runs/43489998486), incluindo código, PyInstaller, EXE offline, instalação, teste instalado e desinstalação. Esse workflow produziu um artefato 0.5.0-dev; não publicou uma release.
