@@ -2,7 +2,9 @@
 
 Aplicativo desktop em português para revisar gravações longas de gameplay e localizar intervalos aproveitáveis. Processa localmente em CPU, oferece faixas OBS, análise sonora/visual, transcrição opcional, pontuação explicável, revisão manual e exportação. Não prevê viralização nem reconhece semanticamente acontecimentos de jogos.
 
-**Fase 3 — versão 0.6.0:** timeline com ondas reais e prévia, favoritos/classificação, cortes manuais, projetos .radar.json e MP4 horizontal/vertical com recorte ou fundo desfocado, presets e legendas gravadas. O código e o aplicativo instalado passaram na validação nativa Windows. Veja o [guia da Fase 3](docs/FASE3.md).
+**Estúdio de Legendas — versão 0.7.0:** reutiliza a transcrição Whisper/cache, permite corrigir texto e tempos por bloco/palavra, personalizar quatro estilos, salvar presets e exportar SRT, ASS ou MP4 com legendas. Inclui prévia sincronizada, áudio preservado e projeto editável. Veja o [guia do Estúdio de Legendas](docs/ESTUDIO_LEGENDAS.md).
+
+A [Fase 3](docs/FASE3.md) permanece: timeline com ondas reais e prévia, favoritos/classificação, cortes manuais, projetos .radar.json e MP4 horizontal/vertical com recorte ou fundo desfocado. A distribuição 0.6.0 já passou na validação nativa Windows.
 
 A [Fase 2](docs/FASE2.md) mantém áudio externo com sincronização manual, expressões do canal, indicadores de intensidade/ritmo/pausas e contexto da fala. A versão 0.6.0 passou nos testes nativos do código, EXE, instalação, aplicativo instalado e desinstalação.
 
@@ -42,6 +44,7 @@ Use `tiny` no i7-8565U com MX110; `base` ou `small` consomem mais tempo e memór
 5. **Reproduzir** cria uma prévia temporária recodificada e abre FFplay. Os campos **Início no original** e **Fim no original** aceitam `HH:MM:SS.mmm`; clique em **Aplicar limites** para alinhar aos quadros originais. O score permanece o da análise anterior após ajustes manuais.
 6. **Copiar tempos**, exportar **JSON/CSV**, **SRT** ou **MP4**. O vídeo original é protegido. Um MP4 existente só é substituído após confirmação e após concluir a exportação; relatórios e legendas usam destinos novos. Em Exportar, escolha original, horizontal ou vertical, qualidade e legendas. Todas as faixas de áudio do original são preservadas.
 7. Na aba **Timeline**, marque IN/OUT e use **Criar** para um corte manual; **Ondas** carrega os picos reais da janela visível. Organize favoritos e classificação na aba **Organizar**. **Salvar** conserva a revisão em um projeto .radar.json; **Projetos do estúdio** permite reabri-lo sem nova análise.
+8. No **Estúdio de Legendas**, selecione o Short, clique **Gerar legendas**, corrija os blocos e escolha Clássico, Palavra Destacada, Pop/Zoom ou Karaokê. Confira o quadro no cursor ou reproduza até seis segundos com áudio. Exporte SRT/ASS/MP4 e salve o projeto para manter as legendas editáveis, sem API paga.
 
 A pontuação combina gancho lexical, variação sonora relativa, atividade visual e contexto lexical. Os pesos são configuráveis e normalizados conforme os sinais disponíveis; os motivos mostram pontos e pesos efetivos. Alto ≥70, médio ≥45, baixo <45. Volume constante e silêncio não são forçados a gerar destaques. A nota representa relevância interna, sem confirmar emoção, acontecimentos do jogo ou viralização. Podem existir menos sugestões do que o solicitado ou nenhuma.
 

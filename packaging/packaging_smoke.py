@@ -85,6 +85,7 @@ def smoke():
         assert 'teste' in exported_words,exported_words
         assert len(otio.schema.Timeline().tracks)==0
         studio_result=studio_roundtrip(media,tmp/'studio')
+        caption_result=caption_roundtrip(media,tmp/'captions')
         import gc
         gc.collect()
         gemini_result=gemini_offline_smoke(tmp)
@@ -92,7 +93,57 @@ def smoke():
             'silence_vad': True, 'portuguese_transcript': text, 'otio': True,
             'portable_export':True, 'transcript_txt':True,'checkpoint_resume':True,'local_cpu_without_api':True,
             'external_audio_sync':True,'speech_context':True,
-            'studio':studio_result,'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
+            'studio':studio_result,'captions':caption_result,'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
+
+
+def caption_roundtrip(media,folder):
+    """Exercise editable caption UI and all libass effects in the installed EXE."""
+    import time
+    from radar.captions import generate_track,CaptionStyle,set_style,update_cue
+    from radar.caption_preview import frame
+    from radar.export import export_clip,export_ass,export_srt
+    from radar.media import probe,run,executable
+    from radar.model import Cut
+    from radar.render import RenderOptions
+    from radar.projects import save_project,load_project
+    from radar.gui import App
+    folder.mkdir()
+    cut=Cut(1,.4,2.4,0,'Legendas no pacote','Teste funcional',manual=True)
+    speech=[{'start':.8,'end':1.8,'text':'CEFAS RADAR','words':[
+        {'start':.8,'end':1.2,'word':'CEFAS'},{'start':1.2,'end':1.8,'word':'RADAR'}]}]
+    cut.captions=generate_track(cut,speech)
+    cut.captions=update_cue(cut.captions,1,text='CEFAS GAMER',start=.8,end=1.8)
+    for effect in ('classic','highlight','pop','karaoke'):
+        cut.captions=set_style(cut.captions,CaptionStyle(effect=effect,size=64))
+        output=export_clip(media,cut,folder/f'{effect}.mp4',render_options=RenderOptions(preset='leve'))
+        assert abs(probe(output).duration-2)<.05 and len(probe(output).audio)==len(media.audio)
+    ass=export_ass(cut,speech,folder/'caption.ass',width=160,height=90)
+    assert '\\kf' in ass.read_text(encoding='utf-8')
+    srt=export_srt(cut,speech,folder/'caption.srt')
+    assert '00:00:00,400 --> 00:00:01,400' in srt.read_text(encoding='utf-8')
+    frame(media,cut,RenderOptions(),speech,.6,folder/'cursor.png')
+    assert (folder/'cursor.png').stat().st_size>100
+    project=save_project(folder/'caption.radar.json',media,[cut],speech)
+    assert load_project(project)['cuts'][0].captions==cut.captions
+    previous=Path.cwd();profile=folder/'profile';profile.mkdir();app=None;errors=[]
+    try:
+        os.chdir(profile);app=App();app.error=lambda e:errors.append(str(e))
+        app.loaded(media);app.cuts=[cut];app.speech=speech;app.refresh();app.table.selection_set('1')
+        app.show_page('captions');app.update()
+        assert app._caption_cut_id==1 and app.caption_table.get_children()==('1',)
+        app.caption_text.delete('1.0','end');app.caption_text.insert('1.0','CEFAS RADAR')
+        app.caption_effect.set('Pop/Zoom');app.caption_apply_style()
+        deadline=time.monotonic()+30
+        while app.busy and time.monotonic()<deadline:app.update();time.sleep(.02)
+        assert not app.busy and not errors,errors
+        assert cut.captions['cues'][0]['text']=='CEFAS RADAR'
+        assert cut.captions['cues'][0]['style']['effect']=='pop'
+        assert app._caption_image.width()>0
+    finally:
+        if app is not None:app.close()
+        os.chdir(previous)
+    return {'four_cpu_styles':True,'editable_text':True,'word_timestamps':True,'short_offset':True,
+            'srt_ass_mp4':True,'project_roundtrip':True,'synced_preview_gui':True,'audio_tracks_preserved':True}
 
 
 def studio_roundtrip(media,folder):

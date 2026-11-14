@@ -1,25 +1,21 @@
-# Radar de Cortes 0.6.0 — Fase 3 / Windows x64
+# Radar de Cortes 0.7.0 — Estúdio de Legendas / Windows x64
 
-Baixe **RadarCortes-Setup-0.6.0-Windows-x64.exe**, execute o assistente e abra **Radar de Cortes** pelo Menu Iniciar. Inclui Python, FFmpeg/FFprobe/FFplay e tiny CPU/int8; não exige instalar Python ou baixar tiny na primeira abertura.
+Baixe **RadarCortes-Setup-0.7.0-Windows-x64.exe**, execute o assistente e abra **Radar de Cortes** pelo Menu Iniciar. Inclui Python, FFmpeg/FFprobe/FFplay com libass e o Whisper tiny CPU/int8. Instala sobre a versão anterior, mantendo os dados do usuário separados do aplicativo.
 
-O Cefas Radar de Cortes ganha um estúdio de revisão no mesmo aplicativo azul:
+Selecione um Short e abra **Estúdio de Legendas**, também disponível na aba Legendas do editor:
 
-- Timeline com cursor, zoom, deslocamento, IN/OUT e marcação por Shift + arrastar.
-- Ondas reais do áudio original, lidas em lotes e armazenadas por janela; prévia pequena na timeline e quadro maior em aba própria.
-- Cortes manuais antes ou depois da análise, favoritos, títulos/observações e estados Pendente/Aprovado/Descartado.
-- Projetos .radar.json com gravação atômica, reabertura sem nova análise e localização de um original movido. Projetos referenciam os arquivos; não incluem cópias dos vídeos ou credenciais.
-- MP4 original, horizontal 16:9 ou vertical 9:16, com recorte fixo por corte ou fundo desfocado. Resoluções 720/1080 e presets leve/equilibrado/qualidade.
-- Legendas gravadas no vídeo e SRT com os horários das palavras efetivamente contidas no corte.
-- Fila com integridade SHA-256 e configurações separadas por formato/qualidade/legenda, preservando saídas anteriores.
+- Geração automática reutilizando a transcrição Whisper existente e o cache. Quando necessário, transcreve somente o áudio ainda não processado do Short em CPU, sem API paga.
+- Correção de texto e tempos do bloco, sincronização manual por palavra, inclusão/remoção de blocos e ajuste automático dos horários relativos ao Short.
+- Clássico, Palavra Destacada, Pop/Zoom e Karaokê; fontes, cores, tamanho, contorno, sombra, posição e negrito configuráveis.
+- Estilo global ou individual por bloco, ativação/desativação e presets personalizados salvos neste computador.
+- Prévia de um quadro sincronizado com o cursor e reprodução de até seis segundos com animação e áudio no FFplay, sem renderizar o vídeo inteiro a cada edição.
+- Exportação SRT, ASS com estilos/animações e MP4 final com legendas. Áudio compatível copiado; outros codecs usam ALAC/PCM preservando a precisão, inclusive PCM de 32 bits e ponto flutuante. Essa opção pode aumentar os arquivos; desativá-la usa AAC.
+- Projetos `.radar.json` versão 2 preservam todos os textos, tempos e estilos para novas edições. O leitor continua aceitando projetos da versão 0.6.0.
 
-Whisper e Gemini continuam opcionais. O motor local usa CPU, sem API obrigatória, GPU ou Ollama. Os recursos de checkpoint, pausa/cancelamento/retomada, transcrição, MP4/TXT/SRT/JSON/CSV e FilmCraft permanecem disponíveis.
+Sem tempos por palavra utilizáveis, Destaque/Karaokê exibem a aparência clássica até a sincronização manual. Alterar a quantidade de palavras remove a associação antiga; o editor não inventa novos tempos. SRT guarda texto/tempos; ASS guarda também os estilos. Fontes ausentes podem ser substituídas pelo sistema.
 
-O MP4 preserva todas as faixas originais. O microfone externo continua sendo apenas uma fonte de análise/transcrição: adicione-o no editor se ele não estiver audível no vídeo. FilmCraft/OTIO continuam usando o original, sem aplicar automaticamente o novo formato ou legendas gravadas. Reproduzir renderiza uma prévia temporária no FFplay, em janela própria.
+O Radar e o editor da Fase 3 continuam disponíveis, incluindo timeline, ondas, cortes manuais, favoritos, fila recuperável, formatos de vídeo e FilmCraft. Whisper e Gemini permanecem opcionais no fluxo de análise. Legendas não dependem de Gemini, chave ou serviço pago. Microfone externo usado na análise não é adicionado ao MP4; a exportação preserva as faixas do vídeo original.
 
-Cortes manuais não recebem nota automática. As notas locais e opiniões Gemini exigem revisão humana e não indicam probabilidade de viralização. Não há rastreamento automático de rosto ou ação. O desempenho não foi medido no Lenovo do usuário.
+Os testes verificam timestamps, cache, arquivos e pixels reais dos quatro efeitos, prévia sincronizada, pacotes AAC, áudio atrasado e precisão PCM, projetos e o fluxo da interface. Também foi exercitado o Whisper tiny real offline com a amostra de português do projeto. A release é criada somente após a suíte nativa Windows, o EXE offline, a instalação, os testes do aplicativo instalado e a desinstalação passarem. As validações Gemini usam dados controlados, sem consumir uma chave real.
 
-A suíte local completa passou em 150 testes e os 18 testes de interface passaram após os ajustes visuais. Esta release só é criada após a suíte nativa Windows, o teste offline do EXE, a instalação, o teste do aplicativo instalado e a desinstalação. A verificação inclui renderização vertical, legendas, projetos e fala real em português. Os testes Gemini usam respostas controladas; não há chave pessoal ou consulta de cota real.
-
-A distribuição Windows usa o mesmo AppId e pasta por usuário, mantendo caches/resultados/projetos separados do aplicativo instalado. Inclui Python, FFmpeg e tiny. O instalador ainda não possui certificado comercial de assinatura de código; confira a origem e o SHA-256 publicado.
-
-Guia: [Fase 3](https://github.com/PedroHenrique1788/Radar/blob/main/docs/FASE3.md).
+Guia: [Estúdio de Legendas](https://github.com/PedroHenrique1788/Radar/blob/main/docs/ESTUDIO_LEGENDAS.md). O manifesto e o SHA-256 acompanham o instalador.

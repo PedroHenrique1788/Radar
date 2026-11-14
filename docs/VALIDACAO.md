@@ -1,5 +1,19 @@
 # Validação
 
+## Estúdio de Legendas — 0.7.0 (14 de novembro de 2026)
+
+A inspeção partiu de `272d363`, árvore limpa, e a base passou com **150 testes em 79,15 s**. A [auditoria](AUDITORIA_LEGENDAS.md) registra o reuso do Whisper, agrupamento de palavras, cache, exportador e projetos existentes.
+
+A suíte completa passou com **180 testes em 114,43 s**, Python 3.12, FFmpeg/libass real, FilmCraft oficial e Tk/Xvfb. Os 30 casos novos verificam tempos originais/relativos ao Short, limites ajustados sem deslocamento acumulado, palavras recortadas, correção/retempo sem mutar a transcrição, sincronização manual, estilos globais/individuais, presets, ativação e edição preservada, leitura de projetos v1/v2, reutilização de cache incluindo silêncio e somente os novos segundos expostos de um corte, SRT/ASS/MP4, texto literal em ASS, pixels dos quatro efeitos e concordância da prévia com o MP4.
+
+O áudio AAC foi conferido por hashes dos pacotes originais e igualdade PCM após decodificação. Foram verificados atrasos com PTS inicial de 5 s em AAC copiado e PCM convertido para ALAC, além de faixas mistas AAC/PCM. PCM de 32 bits e float32 foram exportados sem redução de precisão, comparando os bytes decodificados. O editor não adiciona o microfone externo ao vídeo; conserva as faixas do original.
+
+O ensaio da interface percorreu geração a partir da transcrição em memória, correção, ajuste temporal, aplicação global/individual, preset, quadro sincronizado, ajuste manual por palavra com valores em segundos, exportação dos três formatos, salvamento e reabertura com texto pendente, ativação e criação/remoção de blocos. Campos inválidos impedem trocar de tela sem descartar a edição. Após melhorar a rolagem dos painéis internos e adequar a imagem à área disponível, os três testes de interface relevantes passaram novamente em **9,92 s**, incluindo o fluxo anterior de exportação/FilmCraft e uma janela de 1000×620.
+
+O Whisper tiny real foi executado offline em CPU/int8 na amostra sintética portuguesa já incluída no projeto. Foram gerados 4 blocos, 27 palavras com tempos, SRT, ASS, projeto e MP4 vertical com fundo desfocado e Karaokê. Há erros de reconhecimento na amostra; o teste não mede precisão em gameplay. As capturas do [guia](ESTUDIO_LEGENDAS.md) mostram a janela real em Tk 8.6, a primeira frase corrigida e o quadro renderizado.
+
+O novo bloco `caption_roundtrip` do smoke do pacote passou no código-fonte: quatro estilos renderizados, SRT/ASS/MP4, deslocamento do Short, todas as faixas de áudio, projeto e correção/prévia pela interface. O workflow Windows executa esse bloco dentro do EXE e do aplicativo instalado; a publicação depende da aprovação de todos os gates nativos.
+
 ## Evolução 2.0, Fase 3 — 0.6.0 (13 de novembro de 2026)
 
 Base: commit `e2a0ec6`, sem alterações pendentes antes do trabalho. A suíte anterior passou com **131 testes em 96,81 s**. Também foi confirmado o resultado da execução Windows da Fase 2: [43489998486](https://github.com/PedroHenrique1788/Radar/actions/runs/43489998486), incluindo código, PyInstaller, EXE offline, instalação, teste instalado e desinstalação. Esse workflow produziu um artefato 0.5.0-dev; não publicou uma release.
