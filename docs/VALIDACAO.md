@@ -10,6 +10,8 @@ O bloco `workspace_roundtrip` do teste funcional do pacote foi exercitado no có
 
 As capturas usam a janela real em Tk 8.6 e uma gravação sintética já usada na validação Whisper, com cinco cortes manuais de demonstração. Há verificação visual em 1320×850 e 1000×620. As medições são do processo de teste, sem benchmark no Lenovo do usuário. Não foram adicionadas dependências ou serviços pagos.
 
+Após otimizar a consulta de avaliações somente para clipes com revisão Gemini, os cinco testes novos passaram novamente em **6,88 s**. A execução nativa Windows [43542543641](https://github.com/PedroHenrique1788/Radar/actions/runs/43542543641), no commit `4e236f8`, aprovou o código, o EXE offline, o instalador, a instalação silenciosa, o aplicativo instalado e a desinstalação. O novo bloco de painel/biblioteca passou dentro do pacote, junto ao estúdio, legendas, Whisper real, FilmCraft oficial e testes Gemini controlados sem chave real. Essa execução gerou o artefato de validação 0.8.0-dev; a release oficial é construída novamente pela tag.
+
 ## Estúdio de Legendas — 0.7.0 (14 de novembro de 2026)
 
 A inspeção partiu de `272d363`, árvore limpa, e a base passou com **150 testes em 79,15 s**. A [auditoria](AUDITORIA_LEGENDAS.md) registra o reuso do Whisper, agrupamento de palavras, cache, exportador e projetos existentes.
