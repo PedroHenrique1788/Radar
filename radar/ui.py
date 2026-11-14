@@ -75,6 +75,7 @@ def theme(app):
     style.configure('Vertical.TScrollbar',background='#24364d',troughcolor='#0b1525',bordercolor=PANEL,arrowcolor=MUTED,lightcolor=PANEL,darkcolor=PANEL)
     style.map('Treeview',background=[('selected','#194c80')],foreground=[('selected','#ffffff')])
     style.configure('Treeview.Heading',background='#1a2e47',foreground=MUTED,font=(FONT,9,'bold'),padding=(5,10))
+    style.configure('Caption.Treeview',rowheight=30)
     style.configure('Horizontal.TProgressbar',background=accent,troughcolor='#15263e',borderwidth=0)
     app.configure(bg=BG)
     app.option_add('*TCombobox*Listbox.background','#102039')
@@ -142,7 +143,7 @@ def build(app):
     app.brand_label=ttk.Label(sidebar,textvariable=app.channel,style='Brand.TLabel',wraplength=156)
     app.brand_label.pack(anchor='w')
     ttk.Label(sidebar,text='RADAR DE CORTES',style='BrandSmall.TLabel').pack(anchor='w',pady=(3,26))
-    for key,label in [('video','1  Selecionar vídeo'),('analysis','2  Analisar'),('review','3  Revisar cortes'),('export','4  Exportar')]:
+    for key,label in [('video','1  Selecionar vídeo'),('analysis','2  Analisar'),('review','3  Revisar cortes'),('captions','Estúdio de Legendas'),('export','4  Exportar')]:
         b=ttk.Button(sidebar,text=label,style='Nav.TButton',command=lambda k=key:app.show_page(k))
         b.pack(fill='x',pady=3)
         app._nav_buttons[key]=b
@@ -161,13 +162,15 @@ def build(app):
     app.page_host.rowconfigure(0,weight=1)
     app.page_host.columnconfigure(0,weight=1)
     app.pages={}
-    for name in ('video','analysis','review','export','settings'):
-        page=ttk.Frame(app.page_host) if name=='review' else ScrollPage(app.page_host)
+    for name in ('video','analysis','review','captions','export','settings'):
+        page=ttk.Frame(app.page_host) if name in ('review','captions') else ScrollPage(app.page_host)
         page.grid(row=0,column=0,sticky='nsew')
         app.pages[name]=page
     build_video(app,app.pages['video'].content)
     build_analysis(app,app.pages['analysis'].content)
     build_review(app,app.pages['review'])
+    from .caption_ui import build as build_captions
+    build_captions(app,app.pages['captions'])
     build_export(app,app.pages['export'].content)
     build_settings(app,app.pages['settings'].content)
     theme(app)
@@ -345,6 +348,9 @@ def build_review(app,parent):
     app._cut_buttons.append(button(row,'Aplicar',app.apply_review,True))
     row=ttk.Frame(pane);row.pack(fill='x')
     app._cut_buttons.append(button(row,'Remover corte manual',app.remove_manual_cut))
+    legends=ttk.Frame(app.review_tabs,padding=10);app.review_tabs.add(legends,text='Legendas')
+    ttk.Label(legends,text='Crie e corrija legendas deste Short com a transcrição local.',wraplength=280).pack(anchor='w')
+    app._cut_buttons.append(button(legends,'Abrir Estúdio de Legendas',app.open_captions,True))
     ai=ttk.Frame(right,style='Card.TFrame');ai.grid(row=5,column=0,sticky='ew',pady=(7,0))
     app._cut_buttons.append(button(ai,'Revisar seleção',app.review_gemini,True))
     app.resume_gemini_button=button(ai,'Retomar fluxo',app.retry_gemini)
@@ -366,7 +372,7 @@ def build_export(app,parent):
         row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x',pady=4)
         ttk.Label(row,text=text,style='Card.TLabel',width=42).pack(side='left')
         ttk.Entry(row,textvariable=app.render_vars[key],width=8).pack(side='left')
-    ttk.Checkbutton(box,text='Gravar legendas no vídeo (requer transcrição neste corte)',variable=app.render_vars['burn_subtitles']).pack(anchor='w')
+    ttk.Checkbutton(box,text='Gravar legendas (também altera os cortes selecionados)',variable=app.render_vars['burn_subtitles'],command=app.caption_legacy_toggle).pack(anchor='w')
     description(box,'Legendas usam a transcrição selecionada. Um microfone externo usado na análise precisa ser adicionado no editor se não estiver audível no vídeo original.')
     row=ttk.Frame(box,style='Card.TFrame');row.pack(fill='x')
     app._config_buttons.append(button(row,'Salvar preset',app.save_rendering))

@@ -29,9 +29,11 @@ from .export import transcript_entries
 from .desktop_analysis import AnalysisDesktop
 from .profiles import AnalysisOptions
 from .desktop_studio import StudioDesktop,STATES
+from .desktop_captions import CaptionDesktop
+from copy import deepcopy
 
 
-class App(StudioDesktop,AnalysisDesktop,tk.Tk):
+class App(CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
     def __init__(self):
         super().__init__()
         prefs=read_settings()
@@ -80,6 +82,7 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
         self._closing=False
         self.init_analysis(prefs)
         self.init_studio(prefs)
+        self.init_captions(prefs)
         self.ai_reviews={};self.ai_signatures={};self.ai_context={};self.ai_response=None
         ui.build(self)
         self.bind('<MouseWheel>',self._scroll_page,add='+')
@@ -95,9 +98,13 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
         self._monitor_after=self.after(500,self.update_runtime)
 
     def show_page(self,name):
+        if getattr(self,'current_page',None)=='captions' and name!='captions':
+            try:self.flush_captions()
+            except ValueError as exc:self.error(exc);return
         pages={'video':('Selecione sua gravação','Traga o vídeo. O Radar ajuda a encontrar momentos que merecem revisão.'),
                'analysis':('Prepare a análise','Escolha o áudio, a transcrição e a duração dos seus cortes.'),
                'review':('Revise os cortes','Veja os horários originais, ajuste os limites e decida o que exportar.'),
+               'captions':('Estúdio de Legendas','Corrija falas, sincronize palavras e aplique o estilo do seu canal.'),
                'export':('Pronto para editar e publicar','Vídeos, transcrições, legendas e projetos de edição em um só lugar.'),
                'settings':('Configurações do seu Radar','Desempenho em CPU, pesos dos sinais, identidade do canal e Gemini opcional.')}
         if name not in pages:return
@@ -110,9 +117,16 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
         self.pages[name].tkraise()
         for key,b in self._nav_buttons.items():
             b.configure(style='NavActive.TButton' if key==name else 'Nav.TButton')
+        if name=='captions':
+            try:self.enter_captions()
+            except ValueError as exc:self.error(exc)
 
     def _scroll_page(self,event):
         page=self.pages.get(self.current_page)
+        widget=event.widget
+        while widget is not None and widget is not self:
+            if isinstance(widget,ui.ScrollPage):page=widget;break
+            widget=getattr(widget,'master',None)
         if not isinstance(page,ui.ScrollPage) or event.widget==page.canvas:return
         if isinstance(event.widget,(tk.Text,ttk.Treeview,ttk.Combobox)):return
         num=getattr(event,'num',None)
@@ -134,6 +148,7 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
         self.pause_button.configure(state='normal' if self.busy and not self._closing else 'disabled')
         self.resume_analysis_button.configure(state='normal' if self.media and self._has_resume and not self.busy else 'disabled')
         self.configure(cursor='watch' if self.busy else '')
+        self.caption_picker.configure(state='disabled' if self.busy else 'readonly')
 
     def _set_text(self,widget,text):
         widget.configure(state='normal');widget.delete('1.0','end');widget.insert('end',text);widget.configure(state='disabled')
@@ -302,6 +317,7 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
             self.work(lambda: probe(path), self.loaded)
 
     def loaded(self, media):
+        self.reset_captions()
         self.media = media
         self.path.set(media.path)
         self.cuts, self.speech = [], []
@@ -354,6 +370,7 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
             old=previous.get((cut.start,cut.end))
             if old:
                 cut.favorite=old.favorite;cut.review_state=old.review_state;cut.framing=dict(old.framing)
+                cut.captions=deepcopy(old.captions)
                 if old.user_edited:cut.title=old.title;cut.editing=old.editing;cut.user_edited=True
             if cut.id in used:cut.id=next_id;next_id+=1
         self.cuts=self.cuts[:max(0,2000-len(manual))]+manual
@@ -396,6 +413,7 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
         self.cut_count.set('1 sugestão' if len(self.cuts)==1 else f'{len(self.cuts)} sugestões' if self.cuts else 'Nenhum corte ainda')
         if self.cuts:self.cut_count.set(f'{len(self.table.get_children())}/{len(self.cuts)} cortes • {sum(c.favorite for c in self.cuts)} favoritos')
         self.timeline.update_cuts(self.cuts)
+        self.refresh_caption_clips()
         self._sync_controls()
 
     def sort(self, key):
@@ -500,6 +518,7 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
         if self.busy:
             return self.error('Aguarde a operação atual antes de exportar.')
         try:
+            self.flush_captions()
             c = self.selected(True)[0]
             rendering=self.rendering_for_export()
             path = filedialog.asksaveasfilename(defaultextension='.mp4', initialfile=f'corte_{c.id:02}.mp4',
@@ -523,6 +542,7 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
     def export_batch(self):
         if self.busy:return
         try:
+            self.flush_captions()
             cuts=self.selected()
             rendering=self.rendering_for_export()
             folder=filedialog.askdirectory(title='Pasta da fila de MP4 (repita para retomar clipes pendentes)',initialdir=str(self.last_output))
@@ -555,6 +575,7 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
 
     def srt(self):
         try:
+            self.flush_captions()
             c = self.selected(True)[0]
             path = filedialog.asksaveasfilename(defaultextension='.srt', initialfile=f'corte_{c.id:02}.srt')
             if path:
@@ -564,6 +585,7 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
 
     def preview(self):
         try:
+            self.flush_captions()
             c = self.selected(True)[0]
             rendering=self.rendering_for_export()
             player = executable('ffplay')
@@ -892,6 +914,7 @@ class App(StudioDesktop,AnalysisDesktop,tk.Tk):
 
     def close(self):
         self._closing=True
+        if self._caption_after is not None:self.after_cancel(self._caption_after);self._caption_after=None
         if self._seek_after is not None:self.after_cancel(self._seek_after);self._seek_after=None
         self.cancel.set()
         if self.busy:

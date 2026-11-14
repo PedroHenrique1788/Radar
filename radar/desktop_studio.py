@@ -209,6 +209,7 @@ class StudioDesktop:
         if self.busy:return
         if not self.media:return self.error('Selecione um vídeo para salvar o projeto.')
         try:
+            self.flush_captions()
             Path('projetos').mkdir(exist_ok=True)
             target=self.project_path if self.project_path and not save_as else filedialog.asksaveasfilename(
                 title='Salvar projeto do Radar',defaultextension='.radar.json',initialdir=str(Path('projetos').resolve()),
