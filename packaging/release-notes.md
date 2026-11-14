@@ -1,21 +1,20 @@
-# Radar de Cortes 0.7.0 — Estúdio de Legendas / Windows x64
+# Radar de Cortes 0.8.0 — Painel e Biblioteca / Windows x64
 
-Baixe **RadarCortes-Setup-0.7.0-Windows-x64.exe**, execute o assistente e abra **Radar de Cortes** pelo Menu Iniciar. Inclui Python, FFmpeg/FFprobe/FFplay com libass e o Whisper tiny CPU/int8. Instala sobre a versão anterior, mantendo os dados do usuário separados do aplicativo.
+Baixe **RadarCortes-Setup-0.8.0-Windows-x64.exe**, execute o assistente e abra **Radar de Cortes** pelo Menu Iniciar. O pacote inclui Python, FFmpeg/FFprobe/FFplay e Whisper tiny CPU/int8. A atualização usa a mesma instalação por usuário e preserva seus dados separados do aplicativo.
 
-Selecione um Short e abra **Estúdio de Legendas**, também disponível na aba Legendas do editor:
+O Radar ganha uma organização inspirada no Clips Studio / Clips Kitty, com implementação própria e a identidade azul CefasGamer:
 
-- Geração automática reutilizando a transcrição Whisper existente e o cache. Quando necessário, transcreve somente o áudio ainda não processado do Short em CPU, sem API paga.
-- Correção de texto e tempos do bloco, sincronização manual por palavra, inclusão/remoção de blocos e ajuste automático dos horários relativos ao Short.
-- Clássico, Palavra Destacada, Pop/Zoom e Karaokê; fontes, cores, tamanho, contorno, sombra, posição e negrito configuráveis.
-- Estilo global ou individual por bloco, ativação/desativação e presets personalizados salvos neste computador.
-- Prévia de um quadro sincronizado com o cursor e reprodução de até seis segundos com animação e áudio no FFplay, sem renderizar o vídeo inteiro a cada edição.
-- Exportação SRT, ASS com estilos/animações e MP4 final com legendas. Áudio compatível copiado; outros codecs usam ALAC/PCM preservando a precisão, inclusive PCM de 32 bits e ponto flutuante. Essa opção pode aumentar os arquivos; desativá-la usa AAC.
-- Projetos `.radar.json` versão 2 preservam todos os textos, tempos e estilos para novas edições. O leitor continua aceitando projetos da versão 0.6.0.
+- **Painel** inicial com importação, projetos recentes, contadores reais e acesso ao estúdio.
+- **Biblioteca de clipes** com cartões e miniaturas reais, busca por título/fala/categoria sem exigir acentos, favoritos, revisão e indicação de legendas.
+- Filtros Todos/Favoritos/Aprovados/Pendentes/Descartados/Com legendas e ordenação por tempo, potencial ou duração.
+- Atalhos **Editar**, **Legendas** e **MP4** em cada cartão. A seleção é preservada entre páginas e filtros, e **Exportar seleção** usa a fila MP4 recuperável já existente.
+- **Fila e atividade** com tarefa em execução, pausa/cancelamento, checkpoints e CPU/RAM do Radar, além do disco livre.
+- Atalhos de teclado para importar, abrir/salvar projeto, buscar e navegar no estúdio.
 
-Sem tempos por palavra utilizáveis, Destaque/Karaokê exibem a aparência clássica até a sincronização manual. Alterar a quantidade de palavras remove a associação antiga; o editor não inventa novos tempos. SRT guarda texto/tempos; ASS guarda também os estilos. Fontes ausentes podem ser substituídas pelo sistema.
+As miniaturas usam um quadro por clipe e cache da sessão; não executam Whisper ou uma API. O funcionamento continua local em CPU, sem GPU dedicada ou novas dependências. Gemini mantém sua ativação opcional. O Estúdio de Legendas da versão 0.7.0, projetos anteriores, editor, timeline, formatos e FilmCraft continuam disponíveis.
 
-O Radar e o editor da Fase 3 continuam disponíveis, incluindo timeline, ondas, cortes manuais, favoritos, fila recuperável, formatos de vídeo e FilmCraft. Whisper e Gemini permanecem opcionais no fluxo de análise. Legendas não dependem de Gemini, chave ou serviço pago. Microfone externo usado na análise não é adicionado ao MP4; a exportação preserva as faixas do vídeo original.
+Esta adaptação cobre a organização e o fluxo visual. Download por URL, rastreamento automático e publicação em redes sociais continuam fora desta versão.
 
-Os testes verificam timestamps, cache, arquivos e pixels reais dos quatro efeitos, prévia sincronizada, pacotes AAC, áudio atrasado e precisão PCM, projetos e o fluxo da interface. Também foi exercitado o Whisper tiny real offline com a amostra de português do projeto. A release é criada somente após a suíte nativa Windows, o EXE offline, a instalação, os testes do aplicativo instalado e a desinstalação passarem. As validações Gemini usam dados controlados, sem consumir uma chave real.
+Os testes verificam busca/filtros, pontuação editorial válida, miniaturas por pixels e cache, paginação/seleção, navegação para os editores, exportação real dos clipes marcados e reabertura de projetos pelo painel. O instalador só é publicado após os testes nativos Windows, o EXE offline, a instalação, o app instalado e a desinstalação serem aprovados. Os testes Gemini usam respostas controladas e nenhuma chave real.
 
-Guia: [Estúdio de Legendas](https://github.com/PedroHenrique1788/Radar/blob/main/docs/ESTUDIO_LEGENDAS.md). O manifesto e o SHA-256 acompanham o instalador.
+[Guia da nova interface](https://github.com/PedroHenrique1788/Radar/blob/main/docs/REFERENCIA_CLIPS_STUDIO.md) · [Referência solicitada](https://github.com/ColinGPT9/clips-studio)

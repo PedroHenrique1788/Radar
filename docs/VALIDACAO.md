@@ -1,5 +1,15 @@
 # Validação
 
+## Painel e biblioteca inspirados no Clips Studio — 0.8.0 (14 de novembro de 2026)
+
+Referência inspecionada: [ColinGPT9/clips-studio](https://github.com/ColinGPT9/clips-studio), revisão `8990e4aee8ee4a9e667fa3b15aba09d4036039b4`, hoje Clips Kitty, incluindo arquitetura Electron/React/Python e licença AGPL. O Radar partiu de `b46387f`, árvore limpa, com **180 testes aprovados em 107,47 s**. A [comparação e o guia](REFERENCIA_CLIPS_STUDIO.md) descrevem a adaptação com implementação própria no Tkinter e os recursos que continuam específicos da referência.
+
+A suíte completa passou com **185 testes em 121,79 s**, Python 3.12, FFmpeg/libass real, FilmCraft oficial e Tk/Xvfb. Os cinco casos novos verificam busca em títulos/falas com acentos, filtros, prioridade de revisão editorial válida, legendas salvas/desativadas, pixels e cache das miniaturas, paginação com seleção preservada, navegação biblioteca/editor/legendas, exportação real de dois clipes marcados mesmo após filtro, histórico e reabertura pelo painel, invalidação de imagem após ajustar o corte e navegação em 1000×620. Os testes anteriores de transcrição, legenda, projetos, mídia, retomada e FilmCraft permaneceram aprovados.
+
+O bloco `workspace_roundtrip` do teste funcional do pacote foi exercitado no código-fonte com sucesso: abertura no painel, miniatura real, seleção na biblioteca, navegação para editor/legendas, contadores e atividade. A validação Windows executa o mesmo fluxo dentro do EXE e do aplicativo instalado, junto aos gates já existentes. O contrato de inicialização foi atualizado para Painel; a análise local sem API e a exigência de ativação explícita do Gemini foram mantidas.
+
+As capturas usam a janela real em Tk 8.6 e uma gravação sintética já usada na validação Whisper, com cinco cortes manuais de demonstração. Há verificação visual em 1320×850 e 1000×620. As medições são do processo de teste, sem benchmark no Lenovo do usuário. Não foram adicionadas dependências ou serviços pagos.
+
 ## Estúdio de Legendas — 0.7.0 (14 de novembro de 2026)
 
 A inspeção partiu de `272d363`, árvore limpa, e a base passou com **150 testes em 79,15 s**. A [auditoria](AUDITORIA_LEGENDAS.md) registra o reuso do Whisper, agrupamento de palavras, cache, exportador e projetos existentes.

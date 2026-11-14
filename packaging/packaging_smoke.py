@@ -86,6 +86,7 @@ def smoke():
         assert len(otio.schema.Timeline().tracks)==0
         studio_result=studio_roundtrip(media,tmp/'studio')
         caption_result=caption_roundtrip(media,tmp/'captions')
+        workspace_result=workspace_roundtrip(media,tmp/'workspace')
         import gc
         gc.collect()
         gemini_result=gemini_offline_smoke(tmp)
@@ -93,7 +94,34 @@ def smoke():
             'silence_vad': True, 'portuguese_transcript': text, 'otio': True,
             'portable_export':True, 'transcript_txt':True,'checkpoint_resume':True,'local_cpu_without_api':True,
             'external_audio_sync':True,'speech_context':True,
-            'studio':studio_result,'captions':caption_result,'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
+            'studio':studio_result,'captions':caption_result,'workspace':workspace_result,'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
+
+
+def workspace_roundtrip(media,folder):
+    """The new dashboard/library must operate inside the frozen desktop too."""
+    import time
+    from radar.gui import App
+    from radar.model import Cut
+    folder.mkdir();previous=Path.cwd();app=None;errors=[]
+    try:
+        os.chdir(folder);app=App();app.error=lambda exc:errors.append(str(exc))
+        assert app.current_page=='dashboard'
+        app.loaded(media);app.cuts=[Cut(1,.4,2.4,0,'Clipe no pacote','Teste funcional',manual=True,favorite=True)]
+        app.refresh();app.show_page('library');app.update()
+        app.library_thumbnails()
+        deadline=time.monotonic()+30
+        while (app.busy or app._library_after is not None) and time.monotonic()<deadline:app.update();time.sleep(.02)
+        assert not app.busy and not errors,errors
+        assert set(app._library_cards)=={1} and 1 in app._library_photo_images
+        app.library_select_page();assert app.library_selected=={1}
+        app.library_target(1,'review');assert app.current_page=='review'
+        app.library_target(1,'captions');assert app.current_page=='captions' and app._caption_cut_id==1
+        app.show_page('dashboard');app.update();assert app.dashboard_stats['favorites'].get()=='1'
+        app.show_page('jobs');app.update();assert app.activity_table.get_children()
+    finally:
+        if app is not None:app.close()
+        os.chdir(previous)
+    return {'dashboard':True,'real_thumbnail':True,'library_selection':True,'editor_navigation':True,'caption_navigation':True,'activity':True}
 
 
 def caption_roundtrip(media,folder):
@@ -315,7 +343,7 @@ def automatic_gemini_smoke(folder,client_factory,key):
         os.chdir(profile)
         with patch('radar.gui.GeminiClient',client_factory),patch('radar.gui.messagebox.askyesno',return_value=True):
             app=gui.App()
-            assert app.current_page=='video' and app.workflow_mode=='radar' and app.model.get()=='off'
+            assert app.current_page=='dashboard' and app.workflow_mode=='radar' and app.model.get()=='off'
             def finish():
                 deadline=time.monotonic()+15
                 while app.busy and time.monotonic()<deadline:

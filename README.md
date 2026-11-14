@@ -2,6 +2,8 @@
 
 Aplicativo desktop em português para revisar gravações longas de gameplay e localizar intervalos aproveitáveis. Processa localmente em CPU, oferece faixas OBS, análise sonora/visual, transcrição opcional, pontuação explicável, revisão manual e exportação. Não prevê viralização nem reconhece semanticamente acontecimentos de jogos.
 
+**Nova organização — 0.8.0:** painel com projetos recentes e contadores, biblioteca visual de clipes com busca/filtros, miniaturas reais, seleção entre páginas e atalhos para o editor, legendas e MP4. A tela Fila e atividade reúne tarefa atual, checkpoints e métricas. Adaptação com código próprio inspirada no [Clips Studio / Clips Kitty](https://github.com/ColinGPT9/clips-studio), mantendo o azul CefasGamer e os serviços existentes. Veja o [guia da nova interface](docs/REFERENCIA_CLIPS_STUDIO.md).
+
 **Estúdio de Legendas — versão 0.7.0:** reutiliza a transcrição Whisper/cache, permite corrigir texto e tempos por bloco/palavra, personalizar quatro estilos, salvar presets e exportar SRT, ASS ou MP4 com legendas. Inclui prévia sincronizada, áudio preservado e projeto editável. Veja o [guia do Estúdio de Legendas](docs/ESTUDIO_LEGENDAS.md).
 
 A [Fase 3](docs/FASE3.md) permanece: timeline com ondas reais e prévia, favoritos/classificação, cortes manuais, projetos .radar.json e MP4 horizontal/vertical com recorte ou fundo desfocado. A versão 0.7.0 passou na validação nativa Windows do código, EXE e aplicativo instalado.
@@ -45,6 +47,7 @@ Use `tiny` no i7-8565U com MX110; `base` ou `small` consomem mais tempo e memór
 6. **Copiar tempos**, exportar **JSON/CSV**, **SRT** ou **MP4**. O vídeo original é protegido. Um MP4 existente só é substituído após confirmação e após concluir a exportação; relatórios e legendas usam destinos novos. Em Exportar, escolha original, horizontal ou vertical, qualidade e legendas. Todas as faixas de áudio do original são preservadas.
 7. Na aba **Timeline**, marque IN/OUT e use **Criar** para um corte manual; **Ondas** carrega os picos reais da janela visível. Organize favoritos e classificação na aba **Organizar**. **Salvar** conserva a revisão em um projeto .radar.json; **Projetos do estúdio** permite reabri-lo sem nova análise.
 8. No **Estúdio de Legendas**, selecione o Short, clique **Gerar legendas**, corrija os blocos e escolha Clássico, Palavra Destacada, Pop/Zoom ou Karaokê. Confira o quadro no cursor ou reproduza até seis segundos com áudio. Exporte SRT/ASS/MP4 e salve o projeto para manter as legendas editáveis, sem API paga.
+9. Na **Biblioteca de clipes**, busque por título/fala, filtre os resultados e carregue miniaturas. Marque clipes em várias páginas e use **Exportar seleção**. **Fila e atividade** reúne progresso, pausa/cancelamento e histórico de checkpoints.
 
 A pontuação combina gancho lexical, variação sonora relativa, atividade visual e contexto lexical. Os pesos são configuráveis e normalizados conforme os sinais disponíveis; os motivos mostram pontos e pesos efetivos. Alto ≥70, médio ≥45, baixo <45. Volume constante e silêncio não são forçados a gerar destaques. A nota representa relevância interna, sem confirmar emoção, acontecimentos do jogo ou viralização. Podem existir menos sugestões do que o solicitado ou nenhuma.
 
