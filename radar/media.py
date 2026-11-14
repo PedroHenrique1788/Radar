@@ -121,6 +121,7 @@ def probe(path,cancel=None):
     if duration <= 0:
         raise ValueError('Duração do vídeo indisponível.')
     audios = [{'index': s['index'], 'codec': s.get('codec_name'), 'channels': s.get('channels'),
+               'sample_format':s.get('sample_fmt',''),'bits':int(s.get('bits_per_raw_sample') or s.get('bits_per_sample') or 0),
                'language': s.get('tags', {}).get('language', ''), 'title': s.get('tags', {}).get('title', ''),
                'start_time': float(s.get('start_time', origin))} for s in data['streams'] if s['codec_type'] == 'audio']
     return Media(str(path), duration, v['width'], v['height'], fps, v.get('codec_name', '?'), origin,

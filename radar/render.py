@@ -3,11 +3,24 @@ from dataclasses import asdict,dataclass
 import math
 import re
 import textwrap
+from functools import lru_cache
 
 
 PRESETS={'leve':(24,'veryfast'),'equilibrado':(20,'fast'),'qualidade':(18,'medium')}
 MODES={'original':'Original','landscape':'Horizontal 16:9','vertical_crop':'Vertical 9:16 — recorte',
        'vertical_blur':'Vertical 9:16 — fundo desfocado'}
+
+
+@lru_cache(maxsize=4)
+def _has_subtitles(tool):
+    from .media import run
+    return bool(re.search(r'\bsubtitles\s+V->V',run([tool[0],'-hide_banner','-filters'])))
+
+
+def require_libass():
+    from .transcription_cache import tool_stamp
+    if not _has_subtitles(tuple(tool_stamp('ffmpeg'))):
+        raise RuntimeError('Este FFmpeg não inclui o filtro subtitles/libass. Instale a versão completa do FFmpeg ou o instalador do Radar para gerar MP4 com legendas. A edição e as exportações SRT/ASS continuam disponíveis.')
 
 
 @dataclass
@@ -52,15 +65,16 @@ def for_cut(options,cut):
     return result.validate()
 
 
-def video_filters(source,media,options,output='v',subtitles=False):
+def video_filters(source,media,options,output='v',subtitles=False,*,size_override=None):
     """source already starts at PTS zero. Coordinates are explicit, no tracking."""
-    opts=RenderOptions.from_record(options);w,h=opts.dimensions(media)
-    if opts.mode=='original':chain=f'{source}pad=ceil(iw/2)*2:ceil(ih/2)*2,setsar=1'
+    opts=RenderOptions.from_record(options);w,h=size_override or opts.dimensions(media)
+    if opts.mode=='original':
+        chain=f'{source}scale={w}:{h},setsar=1' if size_override else f'{source}pad=ceil(iw/2)*2:ceil(ih/2)*2,setsar=1'
     elif opts.mode=='vertical_crop':
         chain=f'{source}scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}:x=(iw-ow)*{opts.crop_x}:y=(ih-oh)*{opts.crop_y},setsar=1'
     elif opts.mode=='vertical_blur':
         return (f'{source}split=2[bgsource][fgsource];'
-                f'[bgsource]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},boxblur=12:2,setsar=1[background];'
+                f'[bgsource]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},boxblur={max(1,min(12,w//32,h//32))}:2,setsar=1[background];'
                 f'[fgsource]scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1[foreground];'
                 f'[background][foreground]overlay=(W-w)/2:(H-h)/2'+(',subtitles=filename=captions.ass' if subtitles else '')+f'[{output}]')
     else:chain=f'{source}scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1'
@@ -69,6 +83,9 @@ def video_filters(source,media,options,output='v',subtitles=False):
 
 def write_ass(path,entries,cut,width,height):
     """Fixed style and literal text: transcript cannot inject ASS overrides."""
+    if any('style' in entry for entry in entries):
+        from .caption_ass import write_ass as styled_ass
+        return styled_ass(path,entries,cut,width,height)
     font=max(16,round(min(width,height)*.052));margin=max(12,round(height*.065))
     lines=['[Script Info]','ScriptType: v4.00+',f'PlayResX: {width}',f'PlayResY: {height}',
            'WrapStyle: 0','ScaledBorderAndShadow: yes','','[V4+ Styles]',

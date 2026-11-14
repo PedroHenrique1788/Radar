@@ -56,6 +56,7 @@ class Cut:
     manual: bool = False
     framing: dict = field(default_factory=dict)
     user_edited: bool = False
+    captions: dict = field(default_factory=dict)
 
     @property
     def duration(self):

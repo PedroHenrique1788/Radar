@@ -8,7 +8,8 @@ from .media import executable, run, check_cancel, probe,Cancelled
 from .model import timestamp
 from .checkpoints import CheckpointStore,StageError,signature,source_identity
 from .control import ExecutionControl,current_control
-from .render import RenderOptions,PRESETS,video_filters,write_ass,for_cut
+from .render import RenderOptions,PRESETS,video_filters,write_ass,for_cut,require_libass
+from .captions import entries_for_cut,generate_track
 
 
 def verify_source(media):
@@ -26,17 +27,37 @@ def safe_destination(path, source=None, overwrite=False):
     return path
 
 
-def export_clip(media, cut, path, cancel=None, overwrite=False,progress=None,*,render_options=None,speech=None):
+def preserved_audio_codec(audio):
+    if audio.get('codec') in ('aac','mp3','alac','opus','flac','ac3','eac3'):return 'copy'
+    sample=audio.get('sample_format','')
+    if sample.startswith('flt'):return 'pcm_f32le'
+    if sample.startswith('dbl'):return 'pcm_f64le'
+    if sample.startswith('s64'):return 'pcm_s64le'
+    if sample.startswith('s32') and not 0<audio.get('bits',0)<=24:return 'pcm_s32le'
+    return 'alac'
+
+
+def export_clip(media, cut, path, cancel=None, overwrite=False,progress=None,*,render_options=None,speech=None,preview_size=None):
     verify_source(media)
     cut.validate(media.duration)
     rendering=for_cut(render_options,cut)
-    entries=subtitle_entries(cut,speech or []) if rendering.burn_subtitles else []
-    if rendering.burn_subtitles and not entries:
+    if cut.captions:
+        from .captions import validate_track
+        validate_track(cut.captions,media.duration)
+    burn=cut.captions['enabled'] if cut.captions else rendering.burn_subtitles
+    entries=effective_subtitle_entries(cut,speech or []) if burn else []
+    if burn and not entries:
+        if cut.captions:raise ValueError('As legendas estão ativadas, mas este Short não tem blocos no intervalo. Gere/adicione legendas ou desative-as no Estúdio de Legendas.')
         raise ValueError('Ative uma transcrição com tiny/base e confira as falas antes de gravar legendas neste corte.')
+    if burn:require_libass()
     path = safe_destination(path, media.path, overwrite)
     absolute_start, absolute_end = media.origin + cut.start, media.origin + cut.end
+    size=None
+    if preview_size is not None:
+        w,h=rendering.dimensions(media);ratio=min(1,preview_size/max(w,h))
+        size=max(2,round(w*ratio/2)*2),max(2,round(h*ratio/2)*2)
     filters = [f'[0:{media.video_index}]trim=start={absolute_start}:end={absolute_end},setpts=PTS-({absolute_start})/TB[base]',
-               video_filters('[base]',media,rendering,subtitles=rendering.burn_subtitles)]
+               video_filters('[base]',media,rendering,subtitles=burn,size_override=size)]
     args = [executable('ffmpeg'), '-v', 'error', '-nostdin', '-n', '-copyts']
     # Seek near the cut, retaining original PTS; do not decode hours of footage
     # just to export a late Short. Absolute seeking also handles nonzero origins.
@@ -45,21 +66,33 @@ def export_clip(media, cut, path, cancel=None, overwrite=False,progress=None,*,r
     if seek > 0:
         args += ['-seek_timestamp', '1', '-ss', seek]
     args += ['-i', media.path]
-    for i, a in enumerate(media.audio):
+    preserve_audio=bool(cut.captions and cut.captions.get('preserve_audio',True))
+    audio=media.audio
+    if preserve_audio and any('sample_format' not in a for a in audio):audio=probe(media.path,cancel).audio
+    codecs=[preserved_audio_codec(a) if preserve_audio else 'aac' for a in audio]
+    if 'copy' in codecs:
+        # A separate seeked input preserves encoded packets. Timestamp offset
+        # and the MP4 edit list retain leading silence and AAC priming samples.
+        args+=['-seek_timestamp','1','-ss',absolute_start,'-itsoffset',-absolute_start,'-i',media.path]
+    for i,a in enumerate(audio):
+        if codecs[i]=='copy':continue
         filters.append(f"[0:{a['index']}]atrim=start={absolute_start}:end={absolute_end},asetpts=PTS-({absolute_start})/TB,aresample=async=1:first_pts=0,apad,atrim=duration={cut.duration}[a{i}]")
     args += ['-filter_complex', ';'.join(filters), '-map', '[v]']
-    for i in range(len(media.audio)):
-        args += ['-map', f'[a{i}]']
+    for i,a in enumerate(audio):
+        args += ['-map', f'1:{a["index"]}' if codecs[i]=='copy' else f'[a{i}]']
     # Re-encode: trim on presentation timestamps, never keyframe-only stream copy.
     quality,speed=PRESETS[rendering.preset]
     args += ['-c:v', 'libx264', '-preset', speed, '-crf', quality, '-pix_fmt', 'yuv420p', '-fps_mode', 'vfr',
-             '-c:a', 'aac', '-movflags', '+faststart', '-t', cut.duration]
+             '-movflags', '+faststart', '-t', cut.duration]
+    for i,codec in enumerate(codecs):
+        args += [f'-c:a:{i}',codec]
+        if codec=='alac':args += [f'-sample_fmt:a:{i}','s32p']
     fd, tmp = tempfile.mkstemp(suffix='.mp4', dir=path.parent)
     os.close(fd)
     Path(tmp).unlink()
     try:
         with tempfile.TemporaryDirectory(prefix='radar-render-') as workdir:
-            if rendering.burn_subtitles:write_ass(Path(workdir)/'captions.ass',entries,cut,*rendering.dimensions(media))
+            if burn:write_ass(Path(workdir)/'captions.ass',entries,cut,*rendering.dimensions(media))
             run(args + [tmp],cancel,progress=progress,duration=cut.duration,cwd=workdir)
         try:
             probe(tmp)
@@ -146,7 +179,10 @@ def export_clips(media,cuts,folder,cancel=None,cache_dir='temporarios',progress=
     control=cancel if isinstance(cancel,ExecutionControl) else ExecutionControl(options,cancel)
     store=CheckpointStore(media.path,cache_dir);store.acquire()
     key=signature(['mp4-queue-v1',store.source_id,str(folder),[(c.id,c.start,c.end) for c in cuts]])
-    if rendering.record()!=RenderOptions().record():
+    if any(c.captions for c in cuts):
+        key=signature(['mp4-queue-v3-captions',key,rendering.record(),[c.framing for c in cuts],
+                       [c.captions for c in cuts],[effective_subtitle_entries(c,speech or []) for c in cuts]])
+    elif rendering.record()!=RenderOptions().record():
         captions=[subtitle_entries(c,speech or []) for c in cuts] if rendering.burn_subtitles else None
         key=signature(['mp4-queue-v2-render',key,rendering.record(),[c.framing for c in cuts],captions])
     total=sum(c.duration for c in cuts);done=0.;outputs=[]
@@ -192,12 +228,27 @@ def export_clips(media,cuts,folder,cancel=None,cache_dir='temporarios',progress=
 def export_srt(cut, speech, path):
     path = safe_destination(path)
     lines = []
-    for entry in subtitle_entries(cut,speech):
+    for entry in effective_subtitle_entries(cut,speech,include_disabled=True):
         start,end=entry['start']-cut.start,entry['end']-cut.start
         lines.append(f'{len(lines)+1}\n{timestamp(start).replace(".", ",")} --> {timestamp(end).replace(".", ",")}\n{entry["text"]}\n')
     if not lines:
         raise ValueError('Não há fala transcrita neste intervalo.')
     path.write_text('\n'.join(lines), encoding='utf-8')
+    return path
+
+
+def effective_subtitle_entries(cut,speech,*,include_disabled=False):
+    return entries_for_cut(cut,include_disabled=include_disabled) if cut.captions else subtitle_entries(cut,speech)
+
+
+def export_ass(cut,speech,path,*,width=720,height=1280):
+    entries=entries_for_cut(cut,cut.captions or generate_track(cut,speech),include_disabled=True)
+    if not entries:raise ValueError('Não há legendas neste intervalo. Gere ou adicione um bloco no Estúdio de Legendas.')
+    path=safe_destination(path)
+    # Generate into a temporary file, then publish with no-clobber semantics.
+    with tempfile.TemporaryDirectory(prefix='radar-ass-') as tmp:
+        file=write_ass(Path(tmp)/'captions.ass',entries,cut,width,height)
+        publish_file(file,path)
     return path
 
 

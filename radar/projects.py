@@ -13,6 +13,7 @@ from .profiles import AnalysisOptions
 from .render import RenderOptions
 from .render import for_cut
 from .export import verify_source
+from .captions import validate_track
 
 MAX_PROJECT_BYTES=32*1024*1024
 
@@ -27,6 +28,7 @@ def validate_cuts(cuts,duration):
         if not all(isinstance(v,bool) for v in (cut.favorite,cut.manual,cut.user_edited)) or cut.review_state not in ('pending','approved','rejected'):
             raise ValueError('Classificação manual inválida.')
         for_cut(None,cut)
+        if cut.captions:validate_track(cut.captions,duration)
         if isinstance(cut.score,bool) or not isinstance(cut.score,(int,float)) or not math.isfinite(cut.score) or not 0<=cut.score<=100:raise ValueError('Nota local inválida.')
         if not all(isinstance(s,str) and len(s)<=200000 for s in (cut.title,cut.reason,cut.transcript,cut.editing)):
             raise ValueError('Texto de corte inválido ou muito longo.')
@@ -40,7 +42,7 @@ def save_project(path,media,cuts,speech,*,analysis=None,render=None,title='',ove
         raise ValueError('Salve o projeto com extensão .radar.json.')
     if target.exists() and not overwrite:raise FileExistsError('O projeto já existe. Escolha outro nome ou salve uma nova versão.')
     cuts=list(cuts);validate_cuts(cuts,media.duration)
-    payload={'kind':'cefas-radar-studio','version':1,'title':str(title or Path(media.path).stem)[:200],
+    payload={'kind':'cefas-radar-studio','version':2,'title':str(title or Path(media.path).stem)[:200],
              'saved_at':datetime.now(timezone.utc).isoformat(),'source':source_identity(media.path),
              'analysis_audio':dict(media.analysis_audio),'cuts':[asdict(c) for c in cuts],'speech':speech,
              'analysis_options':AnalysisOptions.from_record(analysis).record(),
@@ -69,7 +71,7 @@ def load_project(path,cancel=None,*,source_override=None):
     if path.stat().st_size>MAX_PROJECT_BYTES:raise ValueError('Projeto excede o limite de 32 MB.')
     try:
         record=json.loads(path.read_text(encoding='utf-8-sig'));payload=record['payload']
-        if record.get('sha256')!=signature(payload) or payload.get('kind')!='cefas-radar-studio' or payload.get('version')!=1:
+        if record.get('sha256')!=signature(payload) or payload.get('kind')!='cefas-radar-studio' or payload.get('version') not in (1,2):
             raise ValueError('Formato, versão ou integridade do projeto inválidos.')
         source=payload['source'];actual=source_identity(source_override or source['path'])
         if source_override:

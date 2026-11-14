@@ -8,7 +8,7 @@ import shutil
 import wave
 import time
 
-from .media import probe,extract_audio,align_bounds,check_cancel,Cancelled,executable
+from .media import probe,extract_audio,align_bounds,check_cancel,Cancelled
 from .signals import sound_features,visual_features
 from .transcription import transcribe,constrain_speech
 from .candidates import generate
@@ -16,9 +16,9 @@ from .model import Cut,Media
 from .profiles import AnalysisOptions
 from .control import ExecutionControl
 from .checkpoints import CheckpointStore,StageError,STAGES,signature
-from .runtime import resolve_model
 from .audio_source import probe_audio,extract_external,audio_role
 from .intelligence import SpeechIndex
+from .transcription_cache import tool_stamp,audio_key as audio_checkpoint_key,speech_key as speech_checkpoint_key
 
 
 def _valid_audio(path,record):
@@ -66,9 +66,6 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
 
     try:
         with control.bind():
-            def tool_stamp(name):
-                file=Path(executable(name)).resolve();stat=file.stat()
-                return [str(file),stat.st_size,stat.st_mtime_ns]
             ffmpeg_stamp=tool_stamp('ffmpeg');ffprobe_stamp=tool_stamp('ffprobe')
             request={'path':str(Path(path).resolve()),'track':track,'count':count,'minimum':minimum,'maximum':maximum,
                      'model':model,'options':opts.record(),'requested_count':requested_count or count}
@@ -93,7 +90,7 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
                                   'export_note':'MP4 preserva somente as faixas originais do vídeo.'}
             mark('identify',1,1,'complete');report('identify',1,1,'arquivo')
             batches=[(i,offset,min(opts.batch_seconds,media.duration-offset)) for i,offset in enumerate(range(0,math.ceil(media.duration),opts.batch_seconds))]
-            audio_key=signature(['external-wav-v1',external['source_id'],opts.external_offset,opts.batch_seconds,ffmpeg_stamp,media.duration]) if external else signature(['audio-wav-v2',store.source_id,track,opts.batch_seconds,ffmpeg_stamp,media.origin,media.duration])
+            audio_key=audio_checkpoint_key(store.source_id,media,track,opts,ffmpeg_stamp,external)
             wavs={};extract_done=0
             needs_audio=bool(external or media.audio) and (opts.audio or model!='off')
             for i,offset,duration in batches if needs_audio else []:
@@ -155,10 +152,7 @@ def analyze(path,track='mix',count=10,minimum=15.,maximum=60.,model='off',
             mark('visual',visual_done,media.duration if opts.visual else 0,'complete' if opts.visual else 'skipped')
             visual=[point for i in sorted(visual_parts) for point in visual_parts[i]['values']]
 
-            resolved=Path(resolve_model(model))
-            weights_file=resolved/'model.bin'
-            model_stamp=[str(resolved),weights_file.stat().st_size,weights_file.stat().st_mtime_ns] if weights_file.is_file() else model
-            speech_key=signature(['speech-v4-real-coverage' if external else 'speech-v2',audio_key,model_stamp,'faster-whisper-1.2.1','pt','word_timestamps'])
+            speech_key=speech_checkpoint_key(audio_key,model,external)
             speech_start=max(0.,opts.external_offset) if external else 0.
             speech_end=min(media.duration,opts.external_offset+external['duration']) if external else media.duration
             speech_parts={i:store.load('transcription',speech_key,i) for i,_,_ in batches if model!='off' and i in wavs}

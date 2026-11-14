@@ -72,6 +72,9 @@ def main():
                            ('crop_x',args.crop_x),('crop_y',args.crop_y),('burn_subtitles',args.burn_subtitles)]:
             if value is not None:setattr(rendering,name,value)
         rendering.validate()
+        if args.burn_subtitles is not None:
+            for cut in cuts:
+                if cut.captions:cut.captions['enabled']=args.burn_subtitles
         if args.save_project:
             save_project(args.save_project,media,cuts,speech,analysis=saved['analysis'] if args.project else options,
                          render=rendering,cancel=control,request=saved.get('request') if args.project else {'model':args.model,'track':args.track,'count':args.count,'minimum':args.min,'maximum':args.max})
