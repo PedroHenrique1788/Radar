@@ -12,6 +12,8 @@ As capturas usam a janela real em Tk 8.6 e uma gravação sintética já usada n
 
 Após otimizar a consulta de avaliações somente para clipes com revisão Gemini, os cinco testes novos passaram novamente em **6,88 s**. A execução nativa Windows [43542543641](https://github.com/PedroHenrique1788/Radar/actions/runs/43542543641), no commit `4e236f8`, aprovou o código, o EXE offline, o instalador, a instalação silenciosa, o aplicativo instalado e a desinstalação. O novo bloco de painel/biblioteca passou dentro do pacote, junto ao estúdio, legendas, Whisper real, FilmCraft oficial e testes Gemini controlados sem chave real. Essa execução gerou o artefato de validação 0.8.0-dev; a release oficial é construída novamente pela tag.
 
+A [release oficial 0.8.0](https://github.com/PedroHenrique1788/Radar/releases/tag/v0.8.0), tag no commit `4324194`, passou novamente em todos os gates na execução [43543411525](https://github.com/PedroHenrique1788/Radar/actions/runs/43543411525). Código, EXE offline, instalação, aplicativo instalado, desinstalação e publicação foram aprovados. O instalador público foi baixado e verificado: PE Windows, **297017705 bytes**, SHA-256 **`32e4869c0d55b7d3cb5be6623bfe1092df6cf679cdf543bd89f61963e30f534e`**, idêntico ao `SHA256SUMS.txt` publicado. O manifesto de componentes também foi baixado e conferido.
+
 ## Estúdio de Legendas — 0.7.0 (14 de novembro de 2026)
 
 A inspeção partiu de `272d363`, árvore limpa, e a base passou com **150 testes em 79,15 s**. A [auditoria](AUDITORIA_LEGENDAS.md) registra o reuso do Whisper, agrupamento de palavras, cache, exportador e projetos existentes.
