@@ -4,15 +4,15 @@ Aplicativo desktop em português para revisar gravações longas de gameplay e l
 
 **Estúdio de Legendas — versão 0.7.0:** reutiliza a transcrição Whisper/cache, permite corrigir texto e tempos por bloco/palavra, personalizar quatro estilos, salvar presets e exportar SRT, ASS ou MP4 com legendas. Inclui prévia sincronizada, áudio preservado e projeto editável. Veja o [guia do Estúdio de Legendas](docs/ESTUDIO_LEGENDAS.md).
 
-A [Fase 3](docs/FASE3.md) permanece: timeline com ondas reais e prévia, favoritos/classificação, cortes manuais, projetos .radar.json e MP4 horizontal/vertical com recorte ou fundo desfocado. A distribuição 0.6.0 já passou na validação nativa Windows.
+A [Fase 3](docs/FASE3.md) permanece: timeline com ondas reais e prévia, favoritos/classificação, cortes manuais, projetos .radar.json e MP4 horizontal/vertical com recorte ou fundo desfocado. A versão 0.7.0 passou na validação nativa Windows do código, EXE e aplicativo instalado.
 
-A [Fase 2](docs/FASE2.md) mantém áudio externo com sincronização manual, expressões do canal, indicadores de intensidade/ritmo/pausas e contexto da fala. A versão 0.6.0 passou nos testes nativos do código, EXE, instalação, aplicativo instalado e desinstalação.
+A [Fase 2](docs/FASE2.md) mantém áudio externo com sincronização manual, expressões do canal, indicadores de intensidade/ritmo/pausas e contexto da fala.
 
 A base da [Fase 1](docs/FASE1.md) permanece: motor local em CPU, sem chave/API obrigatória, checkpoints por etapa/lote, pausa/retomada, métricas reais e fila MP4 recuperável. Whisper e Gemini são opcionais. A [auditoria inicial](docs/AUDITORIA_2_0.md) registra a arquitetura anterior.
 
 ## Instalação com assistente (recomendada)
 
-[Baixar Radar de Cortes 0.6.0 para Windows x64](https://github.com/PedroHenrique1788/Radar/releases/download/v0.6.0/RadarCortes-Setup-0.6.0-Windows-x64.exe) · [Notas da versão e checksums](https://github.com/PedroHenrique1788/Radar/releases/tag/v0.6.0)
+[Baixar Radar de Cortes 0.7.0 para Windows x64](https://github.com/PedroHenrique1788/Radar/releases/download/v0.7.0/RadarCortes-Setup-0.7.0-Windows-x64.exe) · [Notas da versão e checksums](https://github.com/PedroHenrique1788/Radar/releases/tag/v0.7.0)
 
 Baixe o arquivo **RadarCortes-Setup-…-Windows-x64.exe** na [página de versões](https://github.com/PedroHenrique1788/Radar/releases). Execute-o, conclua o assistente e abra **Radar de Cortes** no Menu Iniciar. A Área de Trabalho pode receber um atalho opcional. Não baixe “Source code” para esse modo de instalação.
 

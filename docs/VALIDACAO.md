@@ -14,6 +14,10 @@ O Whisper tiny real foi executado offline em CPU/int8 na amostra sintética port
 
 O novo bloco `caption_roundtrip` do smoke do pacote passou no código-fonte: quatro estilos renderizados, SRT/ASS/MP4, deslocamento do Short, todas as faixas de áudio, projeto e correção/prévia pela interface. O workflow Windows executa esse bloco dentro do EXE e do aplicativo instalado; a publicação depende da aprovação de todos os gates nativos.
 
+A execução nativa Windows [43533876172](https://github.com/PedroHenrique1788/Radar/actions/runs/43533876172), no commit `390dd31`, aprovou todos os gates: código, geração PyInstaller, EXE offline, geração do instalador, instalação silenciosa, teste do aplicativo instalado e desinstalação. O smoke inclui o Estúdio de Legendas, além de Whisper real, FilmCraft oficial e contrato Gemini sem rede/DPAPI. Não houve chamada autenticada ao Google. A execução produziu o instalador de validação 0.7.0-dev; a release oficial é construída novamente pela tag.
+
+A CLI também reabriu o projeto real do Whisper, exportou MP4 com `--no-burn-subtitles` e salvou outro projeto: a ativação ficou desligada, mantendo todos os blocos e o estilo Karaokê para futura edição.
+
 ## Evolução 2.0, Fase 3 — 0.6.0 (13 de novembro de 2026)
 
 Base: commit `e2a0ec6`, sem alterações pendentes antes do trabalho. A suíte anterior passou com **131 testes em 96,81 s**. Também foi confirmado o resultado da execução Windows da Fase 2: [43489998486](https://github.com/PedroHenrique1788/Radar/actions/runs/43489998486), incluindo código, PyInstaller, EXE offline, instalação, teste instalado e desinstalação. Esse workflow produziu um artefato 0.5.0-dev; não publicou uma release.
