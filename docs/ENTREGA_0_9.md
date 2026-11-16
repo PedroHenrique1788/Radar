@@ -24,7 +24,7 @@ Modificados: `radar/projects.py`, `desktop_studio.py`, `__main__.py`, `timeline.
 
 ## 4. Parcial ou pendente
 
-- **Windows x64, EXE, instalador e aplicativo instalado desta mudança:** não executados localmente em Linux. Workflow ampliado para PR e smoke de pré-edição; resultado depende do runner Windows.
+- **Validação no hardware alvo e Windows 10/11 do usuário:** pendente. Os gates automatizados passaram no runner Windows Server 2022 x64, incluindo EXE/instalador, conforme execução abaixo; isso não mede o i7-8565U/MX110.
 - **Três gameplays reais e hardware do usuário:** não fornecidos; precisão editorial, cortes úteis perdidos, dano de contexto e tempo de revisão ainda não medidos.
 - **Preservação exata de todo formato de áudio:** o integrador existente usa PCM48 estéreo; surround é reduzido e formatos de maior precisão não preservam seus bits exatos. Separação/sincronismo testados em mídia sintética.
 - **VFR/formatos avançados:** análise em PTS; editor nominal, sujeito a arredondamentos. HDR/rotação/PAR/surround sem validação editorial específica.
@@ -39,6 +39,14 @@ Antes da implementação: **185 passaram, 151,27 s**, Python 3.12/Linux, Tk com 
 Primeira regressão direcionada: **49 passaram, 56,26 s** (estúdio/legendas). Primeiros novos testes: **16 passaram, 13,20 s** após corrigir agrupamento excessivo de pausas. Suíte ampliada intermediária: **201 passaram, 168,19 s**.
 
 **Suíte final: 207 passaram, 143,64 s**, incluindo mais casos reais de VFR/sem áudio, áudio desativado, proteção por marcador, relocalização e cancelamento de tratamento. Após os ajustes finais de interface e validação RF64, **24 testes direcionados passaram em 19,24 s** (23 de pré-edição e um fluxo completo do estúdio). Um arquivo RF64 real foi conferido por FFprobe, sem carregá-lo inteiro em RAM. O smoke novo do pacote também foi executado como função Python em Linux, com fonte multifaixa e criação/reabertura FilmCraft; isso não equivale a executá-lo dentro de EXE Windows. Não houve acesso a conta Gemini nem envio de mídia/transcrição. Testes de cliente externo existentes usam dados controlados.
+
+### Windows nativo — verificado após a correção UTF-8
+
+[Execução 43960311719](https://github.com/PedroHenrique1788/Radar/actions/runs/43960311719), commit funcional **3132ccf26f44d9303d7381e7cfa10c2732b04ef1**: **208 testes passaram em 129,08 s** no Windows Server 2022 x64/Python 3.12.10. PyInstaller gerou o EXE, o teste empacotado offline passou, Inno Setup gerou `RadarCortes-Setup-0.9.0-dev-Windows-x64.exe`, e instalação silenciosa, teste do aplicativo instalado e desinstalação passaram.
+
+Os relatórios do EXE e do app instalado confirmam pré-edição: decisões explícitas, undo/redo, projeto v3, sequência OTIO, projeto nativo FilmCraft reaberto e medições de áudio. Os gates anteriores de legendas, biblioteca, transcrição/VAD offline, áudio e integração FilmCraft também passaram. A etapa de publicação de release foi **skipped**, pois é PR, não tag.
+
+[Artefato de desenvolvimento com instalador, SHA-256, manifesto e relatórios](https://github.com/PedroHenrique1788/Radar/actions/runs/43960311719/artifacts/14273373359). Não é release estável. Atualizações posteriores somente deste relatório não alteram o código funcional validado nesse commit.
 
 ## 6. Problemas e soluções
 
@@ -65,4 +73,4 @@ Conecte CLI oficial pela tela Exportar, confira faixas selecionadas e use **Envi
 
 ## 10. Próximas ações
 
-Concluir os gates Windows/instalador e validar três gameplays reais antes de promover 0.9. Depois, medir protótipo de player Tk versus Qt no hardware alvo, implementar proxies com mapa temporal seguro, estatísticas de decisões e perfis explicáveis. Plano: [1.0/1.1](PLANEJAMENTO_1_0_1_1.md).
+Validar três gameplays reais e medir no hardware do usuário antes de promover 0.9; os gates automatizados Windows/instalador já passaram na execução registrada. Depois, medir protótipo de player Tk versus Qt no hardware alvo, implementar proxies com mapa temporal seguro, estatísticas de decisões e perfis explicáveis. Plano: [1.0/1.1](PLANEJAMENTO_1_0_1_1.md).

@@ -62,4 +62,4 @@ python -m radar.preedit_benchmark gameplay.mkv --cache temporarios/benchmark-nov
 
 Exige cache inicialmente vazio e destino novo, não apaga dados. Faz duas execuções com mesma configuração/fonte: fria e quente. Registra tempo, RSS máximo amostrado de processo/subprocessos, CPU e bytes de I/O aproximados, crescimento do cache, máquina e FFmpeg. A amostragem de 50 ms pode perder processos curtos; não é benchmark de qualidade editorial nem comparação com versões antigas. Use sem outras tarefas concorrentes e compare amostras idênticas.
 
-Veja [relatório](ENTREGA_0_9.md) e [protocolo de três gameplays](VALIDACAO_EDITORIAL_0_9.md). Windows x64, empacotamento e validação editorial continuam gates separados; não publicar release apenas porque testes Linux passaram.
+Veja [relatório](ENTREGA_0_9.md) e [protocolo de três gameplays](VALIDACAO_EDITORIAL_0_9.md). Windows x64 e empacotamento passaram na execução registrada no relatório; a validação editorial e do hardware alvo continua pendente; não publicar release apenas porque testes Linux passaram.
