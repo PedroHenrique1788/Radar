@@ -182,6 +182,9 @@ def test_bounded_queue_cancellation_and_start_paused_do_not_leave_workers(movie)
     assert not session.ready and session.decoded_frames==0
     session.resume()
     deadline=time.monotonic()+5
+    while not session.ready and time.monotonic()<deadline:time.sleep(.005)
+    assert session.ready
+    time.sleep(.16);assert session.position>=.12  # pre-start pause is not subtracted twice
     while session.frames.qsize()<6 and time.monotonic()<deadline:time.sleep(.005)
     assert session.frames.qsize()==6 and session.max_queued_frames<=6
     session.stop();assert not session.thread.is_alive() and session.finished
@@ -199,3 +202,57 @@ def test_invalid_cursor_track_and_changed_source_report_clear_errors(movie):
     session.thread.join(timeout=3)
     assert session.finished and session.error and 'mudou' in session.error.lower()
     assert session.process is None
+
+
+def test_audio_device_clock_loss_stops_worker_and_preserves_last_cursor(movie):
+    values=[]
+    class UnplugSink(ClockSink):
+        unplugged=False
+        @property
+        def position(self):
+            with self.lock:
+                if self.unplugged:raise RuntimeError('Dispositivo de áudio removido')
+                return super().position
+    def factory(**options):
+        value=UnplugSink(**options);values.append(value);return value
+    session=PlaybackSession(movie,cut(0.,2.),RenderOptions(),[],audio_track=movie.audio[0]['index'],
+                            audio_factory=factory,max_size=80,fps=10).start()
+    try:
+        deadline=time.monotonic()+5
+        while session.position<.1 and not session.finished and time.monotonic()<deadline:
+            session.read_frame();time.sleep(.005)
+        assert values and session.ready and not session.finished
+        sink=values[0]
+        with sink.lock:
+            before=session.position;sink.unplugged=True
+            # Exercise the actual UI property access; this must not throw and
+            # must stop the session even if the decoder is waiting on a queue.
+            assert session.position==before
+        session.thread.join(timeout=3)
+        assert session.finished and not session.thread.is_alive()
+        assert session.stop_event.is_set() and sink.closed
+        assert 'removido' in session.error and session.position==before
+        assert session.process.poll() is not None
+    finally:session.stop()
+
+
+def test_audio_device_close_failure_still_finishes_session(movie):
+    values=[]
+    class CloseErrorSink(ClockSink):
+        def close(self):
+            self.closed=True
+            raise RuntimeError('Falha ao fechar dispositivo de áudio')
+    def factory(**options):
+        value=CloseErrorSink(**options);values.append(value);return value
+    session=PlaybackSession(movie,cut(0.,.6),RenderOptions(),[],audio_track=movie.audio[0]['index'],
+                            audio_factory=factory,max_size=80,fps=10).start()
+    try:
+        deadline=time.monotonic()+5
+        while not session.finished and time.monotonic()<deadline:
+            session.read_frame();time.sleep(.005)
+        session.thread.join(timeout=1)
+        assert session.finished and not session.thread.is_alive()
+        assert values[0].closed and session.audio is None
+        assert 'fechar dispositivo' in session.error
+        assert session.process.poll() is not None
+    finally:session.stop()
