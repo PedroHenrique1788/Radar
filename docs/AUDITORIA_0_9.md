@@ -40,3 +40,5 @@ Interface de revisão dedicada dentro da navegação atual, com timeline existen
 ## Testes iniciais
 
 Primeira tentativa: `pytest` ausente (código 127), antes de instalar dependências. Criado venv com requirements-dev existente. Preparado Xvfb local sem instalação no sistema e CLI oficial Linux 0.18.0, arquivo conferido contra SHA256SUMS oficial. Resultado da suíte inicial será registrado após término, antes de modificar código de produção.
+
+Suíte inicial concluída **antes das alterações de produção**: `DISPLAY=:99 FILMCRAFT_CLI=<CLI oficial 0.18.0> .venv/bin/python -m pytest -q --junitxml=...`: **185 passed, 151,27 s**. Sem skips nesta execução Linux. Isso não constitui teste nativo Windows nem avaliação editorial.
