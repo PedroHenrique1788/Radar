@@ -169,7 +169,7 @@ def test_otio_single_sequence_and_native_reopen_preserve_tracks_and_source_times
     cli=os.environ.get('FILMCRAFT_CLI')
     if cli:
         native=create_preedit_project(m,edit,tmp_path,cli=cli);assert native.suffix=='.fcproj'
-        inspection=json.loads((native.parent/'Inspecao_cli.json').read_text());assert len(inspection['video'][0]['items'])==2
+        inspection=json.loads((native.parent/'Inspecao_cli.json').read_text(encoding='utf-8'));assert len(inspection['video'][0]['items'])==2
         assert len([t for t in inspection['audio'] if t['items']])==2
         rendered=tmp_path/'editor.mp4';run([cli,'--project',native,'export',rendered,'--gpu-rendering','off'],timeout=120)
         assert probe(rendered).duration==pytest.approx(24,abs=.05)
@@ -188,7 +188,7 @@ def test_export_failure_keeps_previous_outputs_and_original(obs,tmp_path,monkeyp
     monkeypatch.setattr(filmcraft,'editor_audio',fail)
     with pytest.raises(RuntimeError):create_preedit_project(m,edit,tmp_path,cli=False)
     assert first.read_bytes()==original
-    assert any(json.loads(p.read_text())['status']=='incomplete' for p in tmp_path.rglob('Estado.json'))
+    assert any(json.loads(p.read_text(encoding='utf-8'))['status']=='incomplete' for p in tmp_path.rglob('Estado.json'))
 
 
 def test_audio_advice_and_real_optional_sidecar_do_not_change_source(obs,tmp_path):
@@ -280,8 +280,8 @@ def test_relocation_keeps_preedit_source_and_tampered_source_is_rejected(obs,tmp
     moved=tmp_path/'relocated.mkv';shutil.copy2(obs,moved)
     loaded=load_project(path,source_override=moved)
     assert loaded['preedit'].source_id==loaded['media'].source_id and loaded['preedit'].source_id!=edit.source_id
-    row=json.loads(path.read_text());row['payload']['preedit']['source_id']='wrong';row['sha256']=signature(row['payload'])
-    path.write_text(json.dumps(row))
+    row=json.loads(path.read_text(encoding='utf-8'));row['payload']['preedit']['source_id']='wrong';row['sha256']=signature(row['payload'])
+    path.write_text(json.dumps(row),encoding='utf-8')
     with pytest.raises(ValueError,match='fonte'):load_project(path)
 
 

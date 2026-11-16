@@ -42,6 +42,7 @@ Primeira regressão direcionada: **49 passaram, 56,26 s** (estúdio/legendas). P
 
 ## 6. Problemas e soluções
 
+- Primeiro CI Windows: 207 testes passaram e um teste novo falhou ao ler JSON UTF-8 com encoding padrão cp1252. Corrigida a leitura explícita UTF-8 no teste, mantendo a validação nativa obrigatória. EXE/instalador foram corretamente bloqueados nessa execução (`43959690755`).
 - Dependências/pytest não estavam instalados: criado venv com requirements-dev existente; Xvfb extraído localmente, sem instalar pacote no sistema.
 - Código antigo representava Shorts, não uma sequência completa: mantido Cut para highlights e criado modelo separado de decisões, evitando mudança do retorno público do pipeline.
 - Mix OBS somado a individuais: seleção explícita; mix nomeado inicialmente excluído quando há voz/jogo nomeados e aviso ao escolher combinação duplicável.
