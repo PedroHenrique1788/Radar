@@ -151,6 +151,7 @@ def build(app):
         b=ttk.Button(sidebar,text=label,style='Nav.TButton',command=lambda k=key:app.show_page(k))
         b.pack(fill='x',pady=2)
         app._nav_buttons[key]=b
+    ttk.Button(sidebar,text='Pré-edição',style='Nav.TButton',command=app.open_preedit).pack(fill='x',pady=2)
     ttk.Label(sidebar,text='Seu conteúdo.\nSua edição.',style='BrandSmall.TLabel').pack(side='bottom',anchor='w',pady=(16,0))
     b=ttk.Button(sidebar,text='Preferências',style='Nav.TButton',command=lambda:app.show_page('settings'))
     b.pack(side='bottom',fill='x',pady=4)

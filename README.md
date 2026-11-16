@@ -12,6 +12,12 @@ A [Fase 2](docs/FASE2.md) mantém áudio externo com sincronização manual, exp
 
 A base da [Fase 1](docs/FASE1.md) permanece: motor local em CPU, sem chave/API obrigatória, checkpoints por etapa/lote, pausa/retomada, métricas reais e fila MP4 recuperável. Whisper e Gemini são opcionais. A [auditoria inicial](docs/AUDITORIA_2_0.md) registra a arquitetura anterior.
 
+## Pré-edição 0.9 em desenvolvimento
+
+A branch `feature/radar-0.9-preeditor` acrescenta **Pré-edição** ao menu: análise conservadora por faixa OBS, revisão com aceitar/rejeitar/restaurar, IN/OUT, desfazer/refazer, projeto v3 e envio de uma única sequência editável ao FilmCraft. Sugestões não alteram a sequência até aprovação explícita; o original permanece intacto. Não exige MP4 intermediário, API, GPU ou dependência nova.
+
+Confira o [manual e limitações](docs/PREEDICAO_0_9.md), a [auditoria da base 0.8.0](docs/AUDITORIA_0_9.md), o [relatório de entrega](docs/ENTREGA_0_9.md) e o [protocolo editorial](docs/VALIDACAO_EDITORIAL_0_9.md). **A versão 0.9 não está completamente validada**: os gates Windows/EXE/instalador passaram no [CI](https://github.com/PedroHenrique1788/Radar/actions/runs/43960311719), mas a avaliação editorial com três gameplays reais e o hardware alvo continua pendente. Os links de instalador abaixo continuam apontando para a versão estável 0.8.0.
+
 ## Instalação com assistente (recomendada)
 
 [Baixar Radar de Cortes 0.8.0 para Windows x64](https://github.com/PedroHenrique1788/Radar/releases/download/v0.8.0/RadarCortes-Setup-0.8.0-Windows-x64.exe) · [Notas da versão e checksums](https://github.com/PedroHenrique1788/Radar/releases/tag/v0.8.0)

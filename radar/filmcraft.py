@@ -96,7 +96,7 @@ def local_control(method, params=None, port=9876):
     return reply['result']
 
 
-def editor_audio(media, folder, prefix, cancel=None):
+def editor_audio(media, folder, prefix, cancel=None,progress=None):
     """PCM sidecars preserve every OBS track, stereo layout and its source delay."""
     paths = []
     for audio in media.audio:
@@ -105,7 +105,7 @@ def editor_audio(media, folder, prefix, cancel=None):
             run([executable('ffmpeg'), '-v', 'error', '-nostdin', '-n', '-copyts', '-i', media.path,
                  '-map', f"0:{audio['index']}", '-af',
                  f'asetpts=PTS-({media.origin})/TB,aresample=48000:async=1:first_pts=0,apad',
-                 '-t', media.duration, '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', '-rf64', 'auto', path], cancel)
+                 '-t', media.duration, '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', '-rf64', 'auto', path], cancel,progress=progress,duration=media.duration)
         except BaseException:
             path.unlink(missing_ok=True)
             raise
@@ -216,3 +216,107 @@ def open_project(path, cli=None):
         os.startfile(str(path))
     else:
         raise RuntimeError('Aplicativo desktop não localizado. Abra o arquivo pelo FilmCraft.')
+
+
+def verify_editor_audio(path,duration,cancel=None):
+    # FFprobe understands RF64 sidecars beyond 4 GiB; Python wave does not.
+    data=json.loads(run([executable('ffprobe'),'-v','error','-show_entries',
+                         'format=duration:stream=sample_rate,channels','-of','json',path],cancel,timeout=60))
+    actual=float(data.get('format',{}).get('duration',-1))
+    streams=data.get('streams',[])
+    if abs(actual-duration)>1/48000+.001 or len(streams)!=1 or streams[0].get('sample_rate')!='48000' or streams[0].get('channels')!=2:
+        raise RuntimeError('Duração ou formato da faixa extraída diverge do esperado.')
+
+
+def validate_preedit_native(cli,path,cuts,audio_count,cancel=None):
+    """Inspect through the official CLI, checking every editable track/interval."""
+    info=json.loads(run([cli,'--project',path,'inspect','project'],cancel,timeout=60))
+    sequence=json.loads(run([cli,'--project',path,'inspect','sequence'],cancel,timeout=60))
+    status=json.loads(run([cli,'--project',path,'exec','media.status'],cancel,timeout=60))
+    if not info or any(m.get('status') not in ('online','generated') for m in status):raise RuntimeError('Projeto reaberto com mídia ausente.')
+    # CLI 0.18 inspection reports engine ticks (also checked by the existing
+    # real integration tests). Only read inspection output; never write native JSON.
+    ticks=254016000000
+    tolerance=max(.001,1/30)
+    expected=sum(c.duration for c in cuts)
+    if abs(sequence.get('duration',-1)/ticks-expected)>tolerance:raise RuntimeError('Duração nativa diverge da proposta.')
+    videos=sequence.get('video',[]);audios=[t for t in sequence.get('audio',[]) if t.get('items')]
+    if len(videos)!=1 or len(audios)!=audio_count:raise RuntimeError('Faixas nativas divergentes.')
+    for track in videos+audios:
+        items=track.get('items',[])
+        if len(items)!=len(cuts):raise RuntimeError('Cortes editáveis ausentes no projeto nativo.')
+        elapsed=0.
+        for item,cut in zip(items,cuts):
+            if any(abs(item.get(k,-ticks)/ticks-v)>tolerance for k,v in [('sourceIn',cut.start),('duration',cut.duration),('start',elapsed)]):raise RuntimeError('Corte ou sincronização nativa divergente.')
+            elapsed+=cut.duration
+    return sequence
+
+
+def create_preedit_project(media,preedit,folder,cli=None,cancel=None,progress=lambda *a:None):
+    """One editable sequence, distinct source audio; no intermediate video."""
+    from dataclasses import replace
+    import math
+    import opentimelineio as otio
+    from .export import verify_source
+    from .media import check_cancel
+    from .checkpoints import atomic_json
+    preedit.validate();verify_source(media);check_cancel(cancel)
+    if preedit.source_id!=media.source_id or abs(preedit.duration-media.duration)>1e-6:raise ValueError('Pré-edição de outra fonte.')
+    cuts=preedit.cuts()
+    if not cuts:raise ValueError('A sequência não contém intervalos mantidos. Restaure um intervalo antes de exportar.')
+    selected=[r['index'] for r in preedit.tracks if r['export']]
+    if any(i not in [a['index'] for a in media.audio] for i in selected):raise ValueError('Faixa não encontrada na fonte.')
+    subset=replace(media,audio=[a for a in media.audio if a['index'] in selected])
+    cli=locate_cli() if cli is None else cli
+    warning=''
+    if cli:
+        try:cli=capabilities(cli)['cli']
+        except (RuntimeError,ValueError,OSError) as exc:warning=f'CLI incompatível; OTIO preservado: {exc}';cli=False
+    folder=Path(folder).resolve();folder.mkdir(parents=True,exist_ok=True)
+    job=Path(tempfile.mkdtemp(prefix='Radar_preedicao_',dir=folder))
+    try:
+        required=math.ceil(media.duration*48000*2*2*len(subset.audio))+50*1024**2
+        if shutil.disk_usage(job).free<required:raise RuntimeError('Espaço insuficiente para WAVs separados. Selecione menos faixas ou outra unidade.')
+        paths=[]
+        for i,audio in enumerate(subset.audio):
+            check_cancel(cancel)
+            progress(5+60*i/max(1,len(subset.audio)),f"Preparando faixa OBS {audio['index']} ({i+1}/{len(subset.audio)})…")
+            path=editor_audio(replace(media,audio=[audio]),job,'Radar_original',cancel,
+                progress=lambda seconds:progress(5+60*(i+seconds/media.duration)/max(1,len(subset.audio)),f"Faixa {audio['index']}: {seconds:.1f}/{media.duration:.1f} s"))[0]
+            verify_editor_audio(path,media.duration,cancel)
+            paths.append(path)
+        timeline=export_otio(subset,cuts,job/'Preedicao.otio',paths,cancel)
+        read=otio.adapters.read_from_file(str(timeline));expected=sum(c.duration for c in cuts)
+        if len(read.tracks)!=1+len(paths) or abs(read.duration().to_seconds()-expected)>1e-6:raise RuntimeError('Estrutura OTIO inválida.')
+        for track in read.tracks:
+            if len(track)!=len(cuts):raise RuntimeError('Cortes ausentes na timeline.')
+            for clip,cut in zip(track,cuts):
+                if abs(clip.source_range.start_time.to_seconds()-cut.start)>1e-6 or abs(clip.duration().to_seconds()-cut.duration)>1e-6:raise RuntimeError('Tempos OTIO divergentes.')
+        verify_source(media);check_cancel(cancel)
+        report={'status':'otio','source':media.path,'source_id':media.source_id,'original_duration':media.duration,
+                'sequence_duration':expected,'kept':preedit.kept(),'tracks':selected,'warning':warning,
+                'note':'WAVs PCM48 estéreo sincronizados ao zero do vídeo; não apagar sidecars. VFR usa taxa nominal no editor.'}
+        output=timeline
+        if cli:
+            progress(75,'Importando uma sequência editável na CLI oficial…')
+            script=job/'Importar.jsonl'
+            script.write_text('\n'.join(json.dumps(s,ensure_ascii=False) for s in [
+                {'id':'file.import','params':{'paths':[str(timeline)]}},
+                {'id':'sequence.settings','params':{'width':media.width,'height':media.height,'fps':media.fps,'name':'Pré-edição CefasGamer'}}]),encoding='utf-8')
+            native=job/'Preedicao.fcproj'
+            try:
+                run([cli,'--save-as',native,'run',script],cancel,timeout=300)
+                if not native.is_file() or not native.stat().st_size:raise RuntimeError('A CLI não salvou o projeto.')
+                inspection=validate_preedit_native(cli,native,cuts,len(paths),cancel)
+                atomic_json(job/'Inspecao_cli.json',inspection)
+                output=native;report['status']='native_reopened'
+            except RuntimeError as exc:
+                report['warning']=f'Falha no projeto nativo; use a timeline OTIO: {exc}'
+        check_cancel(cancel);verify_source(media)
+        atomic_json(job/'Verificacao.json',report)
+        progress(100,f'Pré-edição pronta: {output}')
+        return output
+    except BaseException:
+        # Keep potentially referenced sidecars and any earlier exports intact.
+        atomic_json(job/'Estado.json',{'status':'incomplete','note':'Operação interrompida. Resultados anteriores e original preservados; não importar como entrega validada.'})
+        raise

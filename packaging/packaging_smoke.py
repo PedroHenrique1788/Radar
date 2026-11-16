@@ -87,6 +87,7 @@ def smoke():
         studio_result=studio_roundtrip(media,tmp/'studio')
         caption_result=caption_roundtrip(media,tmp/'captions')
         workspace_result=workspace_roundtrip(media,tmp/'workspace')
+        preedit_result=preedit_roundtrip(media,tmp/'preedit')
         import gc
         gc.collect()
         gemini_result=gemini_offline_smoke(tmp)
@@ -94,7 +95,7 @@ def smoke():
             'silence_vad': True, 'portuguese_transcript': text, 'otio': True,
             'portable_export':True, 'transcript_txt':True,'checkpoint_resume':True,'local_cpu_without_api':True,
             'external_audio_sync':True,'speech_context':True,
-            'studio':studio_result,'captions':caption_result,'workspace':workspace_result,'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
+            'preedit':preedit_result,'studio':studio_result,'captions':caption_result,'workspace':workspace_result,'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
 
 
 def workspace_roundtrip(media,folder):
@@ -367,3 +368,30 @@ def automatic_gemini_smoke(folder,client_factory,key):
     finally:
         if app is not None:app.close()
         os.chdir(previous)
+
+
+def preedit_roundtrip(media,folder):
+    """Run inside Windows EXE and installed app; no network/model needed."""
+    from radar.preedit import PreEdit,Suggestion,track_layout
+    from radar.projects import save_project,load_project
+    from radar.filmcraft import create_preedit_project
+    from radar.preedit_pipeline import analyze_preedit
+    import opentimelineio as otio
+    folder.mkdir()
+    measured=analyze_preedit(media,cache_dir=folder/'cache')
+    edit=PreEdit(media.source_id,media.duration,track_layout(media),suggestions=[Suggestion(1,1.,2.,'remove','Teste de revisão explícita',.7)])
+    assert edit.proposed_duration==media.duration
+    edit.edit(1,decision='accepted');assert abs(edit.proposed_duration-(media.duration-1))<.001
+    edit.undo();assert edit.proposed_duration==media.duration;edit.redo()
+    path=save_project(folder/'preedit.radar.json',media,[],[],preedit=edit)
+    assert load_project(path)['preedit'].record()==edit.record()
+    timeline=create_preedit_project(media,edit,folder/'editor',cli=False)
+    read=otio.adapters.read_from_file(str(timeline))
+    assert len(read.tracks[0])==2 and abs(read.duration().to_seconds()-edit.proposed_duration)<.001
+    native=False
+    if os.environ.get('FILMCRAFT_CLI'):
+        result=create_preedit_project(media,edit,folder/'editor',cli=os.environ['FILMCRAFT_CLI'])
+        assert result.suffix=='.fcproj','Pré-edição nativa não validada'
+        native=True
+    return {'explicit_decisions':True,'undo_redo':True,'project_v3':True,'otio_sequence':True,
+            'native_reopened':native,'audio_measurements':bool(measured.audio_analysis)}
