@@ -215,6 +215,10 @@ def detect(media,tracks,sounds,visual,speech,options=None,cancel=None,markers=No
     for s in speech:
         a=max(0,math.floor(s['start']-opts.before));b=min(n,math.ceil(s['end']+opts.after))
         protected[a:b]=True
+    for marker in markers or []:
+        if marker.get('kind')=='important':
+            a=max(0,math.floor(marker['time']-opts.before));b=min(n,math.ceil(marker['time']+opts.after+1))
+            protected[a:b]=True
     # Classify each bin before grouping: a silent mic can span both a voiced
     # cutscene and a genuinely quiet loading screen. A single long mic run must
     # not hide internal evidence changes.
@@ -240,7 +244,7 @@ def detect(media,tracks,sounds,visual,speech,options=None,cancel=None,markers=No
         left=a+opts.after;right=b-opts.before
         if right-left<1:continue
         if label==0:
-            classification='keep';reason='Fala/contexto transcrito ou áudio do jogo/mix ativo: preservar possível diálogo, cutscene ou exploração.';confidence=.8
+            classification='keep';reason='Fala/contexto, marcador importante ou áudio do jogo/mix ativo: preservar possível diálogo, cutscene ou exploração.';confidence=.8
         elif label==1:
             classification='remove';reason='Pausa longa, todas as faixas acusticamente baixas e imagem amostrada estática; revise narrativa antes de aceitar.';confidence=.7
             if not game:

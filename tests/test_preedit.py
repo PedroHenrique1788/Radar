@@ -233,3 +233,64 @@ def test_gui_analysis_decisions_undo_bounds_save_reopen_and_export(obs,tmp_path,
     finally:
         app.close();monkeypatch.undo()
         import gc;gc.collect()
+
+
+@pytest.mark.parametrize('vfr',[False,True])
+def test_real_video_without_audio_keeps_all_time_and_otio_is_editable(tmp_path,vfr):
+    path=tmp_path/'silent.mkv'
+    args=[executable('ffmpeg'),'-v','error','-f','lavfi','-i','color=black:s=160x90:r=25:d=20']
+    if vfr:args+=['-vf',"select='if(lt(t,10),not(mod(n,2)),1)'",'-fps_mode','vfr']
+    run(args+['-c:v','libx264',path])
+    m=probe(path);before=path.read_bytes();edit=analyze_preedit(m,analysis=AnalysisOptions(batch_seconds=16),cache_dir=tmp_path/'cache')
+    assert edit.suggestions and all(s.classification=='review' for s in edit.suggestions)
+    assert edit.proposed_duration==m.duration and not edit.tracks
+    result=create_preedit_project(m,edit,tmp_path/'editor',cli=False)
+    import opentimelineio as otio
+    timeline=otio.adapters.read_from_file(str(result));assert len(timeline.tracks)==1
+    assert timeline.duration().to_seconds()==pytest.approx(m.duration)
+    assert path.read_bytes()==before
+
+
+def test_failed_or_cancelled_audio_treatment_preserves_existing_files(obs,tmp_path):
+    m=probe(obs);out=tmp_path/'keep.wav';out.write_bytes(b'existing user audio')
+    with pytest.raises(FileExistsError):prepare_audio(m,m.audio[0]['index'],out)
+    cancel=threading.Event();cancel.set()
+    with pytest.raises(Cancelled):prepare_audio(m,m.audio[0]['index'],tmp_path/'cancel.wav',cancel=cancel)
+    assert out.read_bytes()==b'existing user audio' and not (tmp_path/'cancel.wav').exists()
+
+
+def test_disabled_audio_never_decodes_tracks_or_suggests_removal(obs,tmp_path,monkeypatch):
+    import radar.preedit_pipeline as pipeline
+    def unexpected(*a,**kw):raise AssertionError('Decodificou áudio desativado')
+    monkeypatch.setattr(pipeline,'extract_audio',unexpected)
+    edit=analyze_preedit(probe(obs),analysis=AnalysisOptions(audio=False),cache_dir=tmp_path/'cache')
+    assert edit.proposed_duration==edit.duration and not any(s.classification=='remove' for s in edit.suggestions)
+
+
+def test_important_marker_protects_context_without_inventing_game_event():
+    m,tracks,sounds,visual=synthetic()
+    edit=detect(m,tracks,sounds,visual,[],markers=[{'time':60.,'kind':'important','label':'Meu momento'}])
+    assert all(s.end<=57 or s.start>=64 or s.classification=='keep' for s in edit.suggestions)
+
+
+def test_relocation_keeps_preedit_source_and_tampered_source_is_rejected(obs,tmp_path):
+    import shutil
+    m=probe(obs);edit=PreEdit(m.source_id,m.duration,track_layout(m))
+    path=save_project(tmp_path/'pre.radar.json',m,[],[],preedit=edit)
+    moved=tmp_path/'relocated.mkv';shutil.copy2(obs,moved)
+    loaded=load_project(path,source_override=moved)
+    assert loaded['preedit'].source_id==loaded['media'].source_id and loaded['preedit'].source_id!=edit.source_id
+    row=json.loads(path.read_text());row['payload']['preedit']['source_id']='wrong';row['sha256']=signature(row['payload'])
+    path.write_text(json.dumps(row))
+    with pytest.raises(ValueError,match='fonte'):load_project(path)
+
+
+
+def test_rf64_sidecars_validate_without_loading_whole_audio(tmp_path):
+    from radar.filmcraft import verify_editor_audio
+    path=tmp_path/'rf64.wav'
+    run([executable('ffmpeg'),'-v','error','-f','lavfi','-i','sine=frequency=880:duration=1',
+         '-ar','48000','-ac','2','-c:a','pcm_s16le','-rf64','always',path])
+    assert path.read_bytes()[:4]==b'RF64'
+    verify_editor_audio(path,1.)
+    with pytest.raises(RuntimeError):verify_editor_audio(path,2.)

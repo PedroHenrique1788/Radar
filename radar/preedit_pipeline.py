@@ -20,7 +20,8 @@ def analyze_preedit(media,*,options=None,analysis=None,tracks=None,speech=None,m
                     cache_dir='temporarios',cancel=None,progress=lambda *a:None):
     opts=AnalysisOptions.from_record(analysis);settings=PreEditOptions.from_record(options)
     control=cancel if isinstance(cancel,ExecutionControl) else ExecutionControl(opts,cancel)
-    store=CheckpointStore(media.path,cache_dir);store.acquire()
+    control.options=opts
+    store=CheckpointStore(media.path,cache_dir);store.acquire();control.job_dir=store.folder
     try:
         with control.bind():
             check_cancel(control)
@@ -33,12 +34,13 @@ def analyze_preedit(media,*,options=None,analysis=None,tracks=None,speech=None,m
             from .preedit import PreEdit
             PreEdit(media.source_id,media.duration,tracks,settings.record()).validate()
             batches=[(i,float(a),min(opts.batch_seconds,media.duration-a)) for i,a in enumerate(range(0,math.ceil(media.duration),opts.batch_seconds))]
-            total=media.duration*(len(tracks)+int(opts.visual));done=0.;sounds={};visual=[]
+            analyzed_tracks=tracks if opts.audio else []
+            total=media.duration*(len(analyzed_tracks)+int(opts.visual));done=0.;sounds={};visual=[]
             stamp=tool_stamp('ffmpeg')
             def report(value,text):
                 control.report('Pré-edição audiovisual',value,total,'s-faixa')
                 progress(100*value/total if total else 100,text)
-            for track in tracks:
+            for track in analyzed_tracks:
                 key=audio_key(store.source_id,media,str(track['index']),opts,stamp)
                 sound_key=signature(['sound-envelope-v3',key]);points=[]
                 for i,a,d in batches:

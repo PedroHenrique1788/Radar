@@ -6,20 +6,20 @@ import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
 
 from .audio_prepare import AudioTreatment,prepare_audio
-from .filmcraft import create_preedit_project,open_project
+from .filmcraft import create_preedit_project,open_project,locate_cli
 from .media import align_bounds
 from .model import Cut,timestamp,parse_time
 from .preedit import PreEdit,PreEditOptions,MODES,STATES,DECISIONS,track_layout
 from .preedit_pipeline import analyze_preedit
 from .timeline import Timeline
-from .ui import ScrollPage
+from .ui import ScrollPage,BG
 
 ROLES={'microphone':'Microfone','game':'Jogo','mix':'Mix','unknown':'Não identificado'}
 
 
 class PreEditWindow(tk.Toplevel):
     def __init__(self,app):
-        super().__init__(app);self.app=app;self.title('CefasGamer — Pré-edição');self.geometry('1080x760');self.minsize(850,650)
+        super().__init__(app);self.app=app;self.transient(app);self.configure(background=BG);self.title('CefasGamer — Pré-edição');self.geometry('1080x760');self.minsize(850,650)
         self.protocol('WM_DELETE_WINDOW',self.close)
         self.summary=tk.StringVar();self.detail=tk.StringVar(value='Selecione uma sugestão para revisar o motivo.')
         self.mode=tk.StringVar();self.original=tk.BooleanVar(value=True);self.vars={};self.track_vars={}
@@ -27,11 +27,12 @@ class PreEditWindow(tk.Toplevel):
         self.output=None
         ttk.Label(self,text='Pré-edição não destrutiva',style='Title.TLabel').pack(anchor='w',padx=14,pady=(12,4))
         ttk.Label(self,textvariable=self.summary,wraplength=1000).pack(anchor='w',padx=14,pady=4)
-        tabs=ttk.Notebook(self);tabs.pack(fill='both',expand=True,padx=12,pady=8)
+        tabs=ttk.Notebook(self)
         review=ttk.Frame(tabs,padding=8);settings=ScrollPage(tabs);audio=ScrollPage(tabs)
         tabs.add(review,text='Revisar sequência');tabs.add(settings,text='Detector e faixas OBS');tabs.add(audio,text='Preparar áudio (opcional)')
         self.timeline=Timeline(review,on_select=self.select,on_range=self.range_changed)
         self.timeline.pack(fill='x');self.timeline.configure(height=145)
+        self.timeline.waveform_hint='Azul: manter | vermelho: remoção aprovada | âmbar: sugestão | roxo: revisar | verde: rejeitada'
         row=ttk.Frame(review);row.pack(fill='x',pady=4)
         ttk.Checkbutton(row,text='Visão original (desmarque para sequência pré-editada)',variable=self.original,command=self.refresh).pack(side='left')
         for label,command in [('−',lambda:self.timeline.zoom(2)),('+',lambda:self.timeline.zoom(.5)),('Tudo',self.timeline.reset_view)]:ttk.Button(row,text=label,width=5,command=command).pack(side='left',padx=2)
@@ -50,12 +51,19 @@ class PreEditWindow(tk.Toplevel):
         for label,command in [('Aceitar remoção',lambda:self.decide('accepted')),('Rejeitar / manter',lambda:self.decide('rejected')),('Restaurar intervalo',lambda:self.decide('pending')),('Desfazer',lambda:self.travel(False)),('Refazer',lambda:self.travel(True)),('Ouvir/ver original',self.preview)]:
             ttk.Button(row,text=label,command=command).pack(side='left',padx=2)
         self.bind('<Control-z>',lambda e:self.travel(False));self.bind('<Control-y>',lambda e:self.travel(True))
+        # Reserve controls around a shrinking table at the minimum window size.
+        for child in review.winfo_children():child.pack_forget()
+        for i,child in enumerate(review.winfo_children()):
+            child.grid(row=i,column=0,sticky='nsew' if child is self.table else 'ew',pady=2)
+        review.columnconfigure(0,weight=1);review.rowconfigure(2,weight=1)
         self.build_settings(settings.content);self.build_audio(audio.content)
-        footer=ttk.Frame(self,padding=10);footer.pack(fill='x')
+        footer=ttk.Frame(self,padding=10);footer.pack(side='bottom',fill='x')
+        actions=ttk.Frame(footer);actions.pack(fill='x');secondary=ttk.Frame(footer);secondary.pack(fill='x',pady=(4,0))
         for label,command in [('Analisar pré-edição',self.analyze),('Salvar projeto',self.save),('Enviar pré-edição para FilmCraft',self.export),('Abrir resultado',self.open_output),('Pausar/retomar',self.pause),('Cancelar',app.cancel.set)]:
-            ttk.Button(footer,text=label,command=command).pack(side='left',padx=2)
-        ttk.Label(self,textvariable=app.status,wraplength=1000).pack(fill='x',padx=14,pady=(0,8))
-        self.refresh()
+            ttk.Button(actions if label in ('Analisar pré-edição','Salvar projeto','Enviar pré-edição para FilmCraft') else secondary,text=label,command=command).pack(side='left',padx=2)
+        ttk.Label(self,textvariable=app.status,wraplength=800).pack(side='bottom',fill='x',padx=14,pady=(0,8))
+        tabs.pack(fill='both',expand=True,padx=12,pady=8)
+        self.refresh();self.update_idletasks();self.lift();self.focus_set()
 
     def close(self):
         # A running worker stores results on App, independently of this view.
@@ -112,7 +120,7 @@ class PreEditWindow(tk.Toplevel):
         app=self.app
         if app.busy:return
         try:
-            opts=self.settings();tracks=self.tracks();analysis=app.options_from_ui();speech=deepcopy(app.speech)
+            opts=self.settings();tracks=self.tracks();analysis=app.options_from_ui();app.analysis_options=analysis;speech=deepcopy(app.speech)
             if app.preedit and app.preedit.history and not messagebox.askyesno('Preservar revisão','Uma nova análise substitui as decisões desta pré-edição. Salve uma cópia antes, se necessário. Continuar?',parent=self):return
             markers=[{'time':c.start,'kind':'important' if c.favorite else 'short','label':c.title[:120]} for c in app.cuts]
             def done(result):
@@ -135,13 +143,13 @@ class PreEditWindow(tk.Toplevel):
         for s in edit.suggestions:self.table.insert('','end',iid=str(s.id),values=(timestamp(s.start),timestamp(s.end),STATES[s.classification],DECISIONS[s.decision]))
         self.timeline.set_media(edit.duration if self.original.get() else max(.001,edit.proposed_duration));cuts=[]
         if self.original.get():
-            base=Cut(10001,0,edit.duration,0,'Manter','');base.preedit_state='keep';cuts.append(base)
+            base=Cut(10001,0,edit.duration,0,'Manter','');base.preedit_state='keep';base.timeline_label='Manter';cuts.append(base)
             for s in edit.suggestions:
                 c=Cut(s.id,s.start,s.end,0,'','');c.preedit_state=s.decision if s.decision!='pending' else s.classification;cuts.append(c)
         else:
             elapsed=0.
             for i,(a,b) in enumerate(edit.kept(),1):
-                c=Cut(10000+i,elapsed,elapsed+b-a,0,'Manter','');c.preedit_state='keep';cuts.append(c);elapsed+=b-a
+                c=Cut(10000+i,elapsed,elapsed+b-a,0,'Manter','');c.preedit_state='keep';c.timeline_label='Mantido';cuts.append(c);elapsed+=b-a
         self.timeline.markers=[{**m,'time':m['time'] if self.original.get() else edit.proposed_time(m['time'])} for m in edit.markers]
         self.timeline.update_cuts(cuts)
         if selected and self.table.exists(selected[0]):self.table.selection_set(selected[0]);self.selected()
@@ -223,7 +231,7 @@ class PreEditWindow(tk.Toplevel):
                 app.notify(f'Pré-edição criada: {path}. Use Abrir resultado; preserve o original e os WAVs.')
                 if self.winfo_exists():
                     messagebox.showinfo('Pré-edição criada',f'{path}\n'+('Projeto nativo reaberto e conferido pela CLI.' if path.suffix=='.fcproj' else 'Fallback OTIO: importe a timeline no FilmCraft. Consulte Verificacao.json para limitações.'),parent=self)
-            app.work(lambda:create_preedit_project(app.media,edit,folder,cli=app.cli or False,cancel=app.cancel,
+            app.work(lambda:create_preedit_project(app.media,edit,folder,cli=app.cli or locate_cli() or False,cancel=app.cancel,
                                                    progress=lambda n,msg:app.events.put(('progress',(n,msg)))),done,message='Enviando pré-edição editável ao FilmCraft…')
         except (ValueError,OSError) as exc:app.error(exc)
 

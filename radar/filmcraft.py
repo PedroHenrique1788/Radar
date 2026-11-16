@@ -218,6 +218,16 @@ def open_project(path, cli=None):
         raise RuntimeError('Aplicativo desktop não localizado. Abra o arquivo pelo FilmCraft.')
 
 
+def verify_editor_audio(path,duration,cancel=None):
+    # FFprobe understands RF64 sidecars beyond 4 GiB; Python wave does not.
+    data=json.loads(run([executable('ffprobe'),'-v','error','-show_entries',
+                         'format=duration:stream=sample_rate,channels','-of','json',path],cancel,timeout=60))
+    actual=float(data.get('format',{}).get('duration',-1))
+    streams=data.get('streams',[])
+    if abs(actual-duration)>1/48000+.001 or len(streams)!=1 or streams[0].get('sample_rate')!='48000' or streams[0].get('channels')!=2:
+        raise RuntimeError('Duração ou formato da faixa extraída diverge do esperado.')
+
+
 def validate_preedit_native(cli,path,cuts,audio_count,cancel=None):
     """Inspect through the official CLI, checking every editable track/interval."""
     info=json.loads(run([cli,'--project',path,'inspect','project'],cancel,timeout=60))
@@ -246,7 +256,6 @@ def create_preedit_project(media,preedit,folder,cli=None,cancel=None,progress=la
     """One editable sequence, distinct source audio; no intermediate video."""
     from dataclasses import replace
     import math
-    import wave
     import opentimelineio as otio
     from .export import verify_source
     from .media import check_cancel
@@ -274,8 +283,7 @@ def create_preedit_project(media,preedit,folder,cli=None,cancel=None,progress=la
             progress(5+60*i/max(1,len(subset.audio)),f"Preparando faixa OBS {audio['index']} ({i+1}/{len(subset.audio)})…")
             path=editor_audio(replace(media,audio=[audio]),job,'Radar_original',cancel,
                 progress=lambda seconds:progress(5+60*(i+seconds/media.duration)/max(1,len(subset.audio)),f"Faixa {audio['index']}: {seconds:.1f}/{media.duration:.1f} s"))[0]
-            with wave.open(str(path),'rb') as w:
-                if abs(w.getnframes()/w.getframerate()-media.duration)>1/48000+.001:raise RuntimeError('Duração da faixa extraída diverge do original.')
+            verify_editor_audio(path,media.duration,cancel)
             paths.append(path)
         timeline=export_otio(subset,cuts,job/'Preedicao.otio',paths,cancel)
         read=otio.adapters.read_from_file(str(timeline));expected=sum(c.duration for c in cuts)

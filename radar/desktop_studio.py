@@ -224,13 +224,14 @@ class StudioDesktop:
                 raise FileExistsError('Escolha outro nome para preservar o projeto existente.')
             analysis=self.options_from_ui();render=self.rendering_for_export();title=self.project_title.get()
             media=self.media;cuts=[Cut(**asdict(c)) for c in self.cuts];speech=self.speech
+            preedit=self.preedit.record() if self.preedit else None
             request={'model':self.model.get(),'track':'mix' if self.track.current()==0 else str(media.audio[self.track.current()-1]['index']),
                      'count':int(self.count.get()),'minimum':float(self.minimum.get()),'maximum':float(self.maximum.get())}
             def done(path):
                 self.project_path=str(path);self.project_dirty=False;self.project_status.set(Path(path).name+' • salvo')
                 self._remember_project(path);self.notify(f'Projeto salvo: {path}')
             self.work(lambda:save_project(target,media,cuts,speech,analysis=analysis,render=render,title=title,
-                      overwrite=bool(self.project_path and Path(target).resolve()==Path(self.project_path).resolve()),cancel=self.cancel,request=request,preedit=self.preedit),done,
+                      overwrite=bool(self.project_path and Path(target).resolve()==Path(self.project_path).resolve()),cancel=self.cancel,request=request,preedit=preedit),done,
                       message='Salvando cortes, falas, favoritos e configurações…')
         except (ValueError,OSError) as exc:self.error(exc)
 

@@ -97,7 +97,7 @@ class Timeline(ttk.Frame):
             for i in range(lo,hi,stride):
                 value=max(peaks[i:min(hi,i+stride)],default=0);x=self.x_at(wa+(i+stride/2)*step)
                 c.create_line(x,center-value*19,x,center+value*19,fill='#58c9db')
-        else:c.create_text(w/2,48,text='Carregue as ondas do áudio original para esta janela',fill='#7891b2',font=('TkDefaultFont',9))
+        else:c.create_text(w/2,48,text=getattr(self,'waveform_hint','Carregue as ondas do áudio original para esta janela'),fill='#7891b2',font=('TkDefaultFont',9))
         for i,cut in enumerate(self.cuts):
             if cut.end<a or cut.start>b:continue
             x1=max(12,self.x_at(cut.start));x2=min(w-12,self.x_at(cut.end));y=73+(i%2)*19
@@ -105,7 +105,7 @@ class Timeline(ttk.Frame):
             state=getattr(cut,'preedit_state',None)
             if state:color={'keep':'#184c7a','remove':'#946424','review':'#8060a0','accepted':'#943c46','rejected':'#16614f'}.get(state,color)
             c.create_rectangle(x1,y,x2,y+16,fill=color,outline='#80bbff' if cut.id==self.selected_id else color,tags=(f'cut-{cut.id}',))
-            if x2-x1>30:c.create_text(x1+4,y+8,text=('★ ' if cut.favorite else '')+str(cut.id),anchor='w',fill='white',font=('TkDefaultFont',8),tags=(f'cut-{cut.id}',))
+            if x2-x1>30:c.create_text(x1+4,y+8,text=('★ ' if cut.favorite else '')+getattr(cut,'timeline_label',str(cut.id)),anchor='w',fill='white',font=('TkDefaultFont',8),tags=(f'cut-{cut.id}',))
         for marker in self.markers:
             t=marker['time']
             if a<=t<=b:
