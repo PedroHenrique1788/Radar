@@ -1,3 +1,9 @@
+# Pré-edição 0.9 — desenvolvimento, sem release validada
+
+Análise conservadora por faixas OBS, revisão explícita não destrutiva, undo/redo, projeto v3 compatível com leitura v1/v2, sequência única OTIO/FilmCraft sem MP4 intermediário e cópia opcional de áudio tratada. Mantém recursos anteriores e modo econômico; sem dependência nova. Veja `docs/PREEDICAO_0_9.md` e `docs/ENTREGA_0_9.md`.
+
+Não publicar como estável sem gates Windows, EXE/instalador e avaliação editorial em três gameplays reais. A entrega Linux não substitui essas validações. As notas históricas da versão estável anterior seguem abaixo.
+
 # Radar de Cortes 0.8.0 — Painel e Biblioteca / Windows x64
 
 Baixe **RadarCortes-Setup-0.8.0-Windows-x64.exe**, execute o assistente e abra **Radar de Cortes** pelo Menu Iniciar. O pacote inclui Python, FFmpeg/FFprobe/FFplay e Whisper tiny CPU/int8. A atualização usa a mesma instalação por usuário e preserva seus dados separados do aplicativo.

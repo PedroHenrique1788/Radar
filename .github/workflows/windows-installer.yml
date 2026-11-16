@@ -4,6 +4,8 @@ on:
     tags: ['v*']
     branches: [main]
     paths: ['radar/**', 'tests/**', 'packaging/**', 'requirements*.txt', '.github/workflows/windows-installer.yml']
+  pull_request:
+    paths: ['radar/**', 'tests/**', 'packaging/**', 'requirements*.txt', '.github/workflows/windows-installer.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -58,7 +60,7 @@ jobs:
       - name: Gerar instalador e validar instalação silenciosa
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.8.0-dev' }
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.9.0-dev' }
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) { choco install innosetup --yes --no-progress }
           if (!(Test-Path $iscc)) { throw 'Inno Setup não encontrado' }
