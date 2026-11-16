@@ -9,7 +9,7 @@ class Timeline(ttk.Frame):
     def __init__(self,parent,*,on_seek=lambda t:None,on_select=lambda i:None,on_range=lambda a,b:None):
         super().__init__(parent)
         self.duration=0.;self.view=(0.,1.);self.cursor=0.;self.range=(0.,0.)
-        self.cuts=[];self.waveform=None;self.selected_id=None;self.drag=None
+        self.cuts=[];self.markers=[];self.waveform=None;self.selected_id=None;self.drag=None
         self.on_seek=on_seek;self.on_select=on_select;self.on_range=on_range
         self.canvas=tk.Canvas(self,height=125,bg='#081322',highlightthickness=0)
         self.canvas.pack(fill='both',expand=True)
@@ -102,8 +102,16 @@ class Timeline(ttk.Frame):
             if cut.end<a or cut.start>b:continue
             x1=max(12,self.x_at(cut.start));x2=min(w-12,self.x_at(cut.end));y=73+(i%2)*19
             color='#94702b' if cut.favorite else '#263c55' if cut.review_state=='rejected' else '#16614f' if cut.review_state=='approved' else '#184c7a'
+            state=getattr(cut,'preedit_state',None)
+            if state:color={'keep':'#184c7a','remove':'#946424','review':'#8060a0','accepted':'#943c46','rejected':'#16614f'}.get(state,color)
             c.create_rectangle(x1,y,x2,y+16,fill=color,outline='#80bbff' if cut.id==self.selected_id else color,tags=(f'cut-{cut.id}',))
             if x2-x1>30:c.create_text(x1+4,y+8,text=('★ ' if cut.favorite else '')+str(cut.id),anchor='w',fill='white',font=('TkDefaultFont',8),tags=(f'cut-{cut.id}',))
+        for marker in self.markers:
+            t=marker['time']
+            if a<=t<=b:
+                x=self.x_at(t);color='#f3c476' if marker['kind']=='important' else '#58c9db'
+                c.create_line(x,25,x,65,fill=color,dash=(3,2))
+                c.create_text(x+2,28,text='★' if marker['kind']=='important' else 'S',anchor='w',fill=color)
         left,right=self.range
         for t,label,color in ((left,'IN','#5aafff'),(right,'OUT','#f3c476')):
             if a<=t<=b:

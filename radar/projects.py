@@ -34,7 +34,7 @@ def validate_cuts(cuts,duration):
             raise ValueError('Texto de corte inválido ou muito longo.')
 
 
-def save_project(path,media,cuts,speech,*,analysis=None,render=None,title='',overwrite=False,cancel=None,request=None):
+def save_project(path,media,cuts,speech,*,analysis=None,render=None,title='',overwrite=False,cancel=None,request=None,preedit=None):
     check_cancel(cancel);verify_source(media)
     target=Path(path).resolve()
     if target==Path(media.path).resolve():raise ValueError('Não é permitido sobrescrever o vídeo original.')
@@ -42,12 +42,17 @@ def save_project(path,media,cuts,speech,*,analysis=None,render=None,title='',ove
         raise ValueError('Salve o projeto com extensão .radar.json.')
     if target.exists() and not overwrite:raise FileExistsError('O projeto já existe. Escolha outro nome ou salve uma nova versão.')
     cuts=list(cuts);validate_cuts(cuts,media.duration)
-    payload={'kind':'cefas-radar-studio','version':2,'title':str(title or Path(media.path).stem)[:200],
+    if preedit is not None:
+        from .preedit import PreEdit
+        preedit=PreEdit.from_record(preedit.record() if isinstance(preedit,PreEdit) else preedit)
+        if preedit.source_id!=media.source_id or abs(preedit.duration-media.duration)>1e-6:raise ValueError('Pré-edição pertence a outra fonte.')
+    payload={'kind':'cefas-radar-studio','version':3,'title':str(title or Path(media.path).stem)[:200],
              'saved_at':datetime.now(timezone.utc).isoformat(),'source':source_identity(media.path),
              'analysis_audio':dict(media.analysis_audio),'cuts':[asdict(c) for c in cuts],'speech':speech,
              'analysis_options':AnalysisOptions.from_record(analysis).record(),
              'render_options':RenderOptions.from_record(render).record(),
              'request':{k:v for k,v in (request or {}).items() if k in ('model','track','count','minimum','maximum')}}
+    if preedit is not None:payload['preedit']=preedit.record()
     record={'payload':payload,'sha256':signature(payload)}
     if len(json.dumps(record,ensure_ascii=False).encode('utf-8'))>MAX_PROJECT_BYTES:raise ValueError('Projeto excede o limite de 32 MB. Divida a revisão em projetos menores.')
     check_cancel(cancel)
@@ -71,7 +76,7 @@ def load_project(path,cancel=None,*,source_override=None):
     if path.stat().st_size>MAX_PROJECT_BYTES:raise ValueError('Projeto excede o limite de 32 MB.')
     try:
         record=json.loads(path.read_text(encoding='utf-8-sig'));payload=record['payload']
-        if record.get('sha256')!=signature(payload) or payload.get('kind')!='cefas-radar-studio' or payload.get('version') not in (1,2):
+        if record.get('sha256')!=signature(payload) or payload.get('kind')!='cefas-radar-studio' or payload.get('version') not in (1,2,3):
             raise ValueError('Formato, versão ou integridade do projeto inválidos.')
         source=payload['source'];actual=source_identity(source_override or source['path'])
         if source_override:
@@ -88,6 +93,13 @@ def load_project(path,cancel=None,*,source_override=None):
                     raise ValueError('Horários da transcrição fora do vídeo.')
             if not isinstance(segment.get('text'),str):raise ValueError('Texto de transcrição inválido.')
             if any(not isinstance(w.get('word'),str) for w in segment.get('words',[])):raise ValueError('Palavras inválidas no projeto.')
+        preedit=None
+        if payload.get('preedit') is not None:
+            from .preedit import PreEdit
+            preedit=PreEdit.from_record(payload['preedit'])
+            if preedit.source_id!=signature(source) or abs(preedit.duration-media.duration)>1e-6:raise ValueError('Pré-edição não corresponde à fonte do projeto.')
+            if sorted(r['index'] for r in preedit.tracks)!=sorted(a['index'] for a in media.audio):raise ValueError('Faixas da pré-edição não correspondem ao original.')
+            if source_override:preedit.source_id=media.source_id
         config=payload.get('analysis_options')
         if isinstance(config,dict):
             config=dict(config)
@@ -96,4 +108,4 @@ def load_project(path,cancel=None,*,source_override=None):
         render=RenderOptions.from_record(payload.get('render_options'))
     except FileNotFoundError:raise FileNotFoundError('Vídeo original não encontrado. Use Localizar vídeo ao abrir o projeto para reconectar o arquivo.') from None
     except (KeyError,TypeError,AttributeError,OverflowError,RecursionError):raise ValueError('O projeto contém campos inválidos ou incompatíveis.') from None
-    return {'path':str(path),'title':payload.get('title',path.stem),'media':media,'cuts':cuts,'speech':speech,'analysis':analysis,'render':render,'request':payload.get('request',{})}
+    return {'path':str(path),'title':payload.get('title',path.stem),'media':media,'cuts':cuts,'speech':speech,'analysis':analysis,'render':render,'request':payload.get('request',{}),'preedit':preedit}

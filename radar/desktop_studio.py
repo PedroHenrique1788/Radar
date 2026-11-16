@@ -23,6 +23,7 @@ class StudioDesktop:
         self.render_vars={k:(tk.BooleanVar(value=v) if isinstance(v,bool) else tk.StringVar(value=str(v))) for k,v in options.record().items()}
         self.render_mode_label=tk.StringVar(value=MODES[options.mode])
         self._preset_crop=(options.crop_x,options.crop_y)
+        self.preedit=None
         self.project_path=None;self.project_dirty=False
         self.project_title=tk.StringVar(value='')
         self.project_status=tk.StringVar(value='Projeto ainda não salvo')
@@ -67,6 +68,9 @@ class StudioDesktop:
     def studio_loaded(self,media):
         if self._seek_after is not None:self.after_cancel(self._seek_after);self._seek_after=None
         self.timeline.set_media(media.duration)
+        window=getattr(self,'_preedit_window',None)
+        if window is not None and window.winfo_exists():window.destroy()
+        self.preedit=None
         self.project_path=None;self.project_dirty=False;self.project_title.set(Path(media.path).stem)
         self.project_status.set('Projeto ainda não salvo');self.review_filter.set('Todos')
         self.cut_start.set(timestamp(0));self.cut_end.set(timestamp(min(30.,media.duration)))
@@ -226,7 +230,7 @@ class StudioDesktop:
                 self.project_path=str(path);self.project_dirty=False;self.project_status.set(Path(path).name+' • salvo')
                 self._remember_project(path);self.notify(f'Projeto salvo: {path}')
             self.work(lambda:save_project(target,media,cuts,speech,analysis=analysis,render=render,title=title,
-                      overwrite=bool(self.project_path and Path(target).resolve()==Path(self.project_path).resolve()),cancel=self.cancel,request=request),done,
+                      overwrite=bool(self.project_path and Path(target).resolve()==Path(self.project_path).resolve()),cancel=self.cancel,request=request,preedit=self.preedit),done,
                       message='Salvando cortes, falas, favoritos e configurações…')
         except (ValueError,OSError) as exc:self.error(exc)
 
@@ -241,6 +245,7 @@ class StudioDesktop:
             for key,var in [('count',self.count),('minimum',self.minimum),('maximum',self.maximum)]:
                 if key in request:var.set(str(request[key]))
             track=request.get('track','mix');self.track.current(0 if track=='mix' else next((i+1 for i,a in enumerate(self.media.audio) if str(a['index'])==str(track)),0))
+            self.preedit=data.get('preedit')
             self.cuts=data['cuts'];self.speech=data['speech'];self.project_path=data['path'];self.project_title.set(data['title'])
             self.project_dirty=False;self.project_status.set(Path(self.project_path).name+' • salvo')
             self._remember_project(data['path']);self.refresh();self.show_page('review')
@@ -253,3 +258,11 @@ class StudioDesktop:
                 else:self.error(exc)
             else:self.error(exc)
         self.work(lambda:load_project(path,self.cancel),done,message='Conferindo original e abrindo projeto…',failed=failed)
+
+    def open_preedit(self):
+        if self.busy:return
+        if not self.media:return self.error('Selecione um vídeo para iniciar a pré-edição.')
+        from .preedit_ui import PreEditWindow
+        window=getattr(self,'_preedit_window',None)
+        if window is not None and window.winfo_exists():window.lift();return
+        self._preedit_window=PreEditWindow(self)

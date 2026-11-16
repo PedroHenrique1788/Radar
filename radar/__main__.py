@@ -77,7 +77,7 @@ def main():
                 if cut.captions:cut.captions['enabled']=args.burn_subtitles
         if args.save_project:
             save_project(args.save_project,media,cuts,speech,analysis=saved['analysis'] if args.project else options,
-                         render=rendering,cancel=control,request=saved.get('request') if args.project else {'model':args.model,'track':args.track,'count':args.count,'minimum':args.min,'maximum':args.max})
+                         render=rendering,cancel=control,preedit=saved.get('preedit') if args.project else None,request=saved.get('request') if args.project else {'model':args.model,'track':args.track,'count':args.count,'minimum':args.min,'maximum':args.max})
         if args.only_favorites:cuts=[c for c in cuts if c.favorite]
         if args.only_approved:cuts=[c for c in cuts if c.review_state=='approved']
         if args.export_dir:export_clips(media,cuts,args.export_dir,control,progress=progress,render_options=rendering,speech=speech)
