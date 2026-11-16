@@ -130,3 +130,16 @@ def test_cancelled_audio_never_writes_samples_and_pcm_alignment_is_checked():
 @pytest.mark.parametrize('options',[{'rate':0},{'rate':True},{'channels':3},{'latency':0},{'latency':float('nan')}])
 def test_invalid_audio_configuration_is_rejected_before_opening_device(options):
     with pytest.raises(ValueError):AudioOutput(**options)
+
+
+@pytest.mark.skipif(os.name!='nt',reason='Requer dispositivo WinMM real no Windows')
+def test_real_windows_default_audio_device_when_available():
+    try:out=AudioOutput()
+    except AudioOutputError as exc:pytest.skip(f'Sem dispositivo de áudio no runner: {exc}')
+    try:
+        out.write(bytes(4800*4));out.pause();paused=out.position
+        time.sleep(.02);assert out.position==pytest.approx(paused,abs=.005)
+        out.resume();deadline=time.monotonic()+2
+        while out.position<.095 and time.monotonic()<deadline:time.sleep(.005)
+        assert out.position>=.095
+    finally:out.close();out.close()
