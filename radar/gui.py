@@ -104,6 +104,7 @@ class App(WorkspaceDesktop,CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
         if getattr(self,'current_page',None)=='captions' and name!='captions':
             try:self.flush_captions()
             except ValueError as exc:self.error(exc);return
+            self.caption_stop_playback()
         pages={'dashboard':('Painel CefasGamer','Seus vídeos, clipes e projetos no mesmo estúdio.'),
                'library':('Biblioteca de clipes','Encontre, compare e selecione os Shorts que quer finalizar.'),
                'jobs':('Fila e atividade','Acompanhe o processamento local e retome trabalhos salvos.'),
@@ -259,6 +260,7 @@ class App(WorkspaceDesktop,CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
         if self.busy:
             self.error('Aguarde a operação atual ou clique em Cancelar.')
             return
+        self.caption_stop_playback()
         self.busy = True
         self.status.set(message)
         self.progress.configure(mode='indeterminate')
@@ -933,6 +935,7 @@ class App(WorkspaceDesktop,CaptionDesktop,StudioDesktop,AnalysisDesktop,tk.Tk):
         except Exception as exc:self.error(exc)
 
     def close(self):
+        self.caption_stop_playback()
         self._closing=True
         if self._library_after is not None:self.after_cancel(self._library_after);self._library_after=None
         if self._caption_after is not None:self.after_cancel(self._caption_after);self._caption_after=None
