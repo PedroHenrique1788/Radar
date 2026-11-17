@@ -19,6 +19,20 @@ from .render import for_cut,video_filters,write_ass,require_libass
 from .runtime import start_process
 
 
+class StreamReader:
+    """Declare a pipe as sequential even if its CRT wrapper advertises seek.
+
+    In particular, Windows pipe wrappers can expose seek/tell that fail with
+    EINVAL. Passing them to PyAV lets libavformat probe/seek a live NUT stream.
+    This adapter deliberately exposes neither seek nor tell; the process owns
+    and closes the underlying handle after demuxing.
+    """
+    def __init__(self,pipe):self.pipe=pipe
+    def readable(self):return True
+    def seekable(self):return False
+    def read(self,size):return self.pipe.read(size)
+
+
 @dataclass(frozen=True)
 class PreviewFrame:
     time: float
@@ -139,7 +153,7 @@ class PlaybackSession:
                 process=start_process(args,stdout=subprocess.PIPE,stderr=err,cwd=work);self.process=process
                 try:
                     if self.stop_event.is_set():return
-                    with av.open(process.stdout,format='nut',mode='r',buffer_size=32768) as container:
+                    with av.open(StreamReader(process.stdout),format='nut',mode='r',buffer_size=32768) as container:
                         for packet in container.demux():
                             if not self._checkpoint():break
                             for frame in packet.decode():
