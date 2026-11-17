@@ -256,3 +256,59 @@ def test_audio_device_close_failure_still_finishes_session(movie):
         assert 'fechar dispositivo' in session.error
         assert session.process.poll() is not None
     finally:session.stop()
+
+
+
+def test_missing_decoder_dependency_reports_error_without_leaving_player_running(movie,monkeypatch):
+    import builtins
+    original=builtins.__import__
+    def missing(name,*args,**kwargs):
+        if name=='av':raise ImportError('PyAV indisponível: DLL de teste')
+        return original(name,*args,**kwargs)
+    monkeypatch.setattr(builtins,'__import__',missing)
+    session=PlaybackSession(movie,cut(),RenderOptions(),[],audio_track=None).start()
+    session.thread.join(timeout=3)
+    assert session.finished and not session.thread.is_alive() and 'PyAV indisponível' in session.error
+    assert session.process is None
+
+
+def test_audio_write_failure_stops_ffmpeg_before_temporary_cwd_cleanup(movie,monkeypatch):
+    from radar import playback
+    original_directory=playback.tempfile.TemporaryDirectory
+    observations=[];outputs=[]
+    class CheckedDirectory:
+        def __init__(self,*args,**kwargs):
+            self.delegate=original_directory(*args,**kwargs)
+        def __enter__(self):return self.delegate.__enter__()
+        def __exit__(self,*args):
+            process=session.process
+            state=(process is not None and process.poll() is not None,
+                   process is not None and process.stdout.closed)
+            observations.append(state)
+            try:
+                assert state==(True,True),'FFmpeg ou seu pipe ainda estavam abertos ao limpar o cwd temporário.'
+            finally:self.delegate.__exit__(*args)
+            return False
+    class WriteErrorSink:
+        def __init__(self,**options):self.closed=False;self.wrote=False;outputs.append(self)
+        @property
+        def position(self):return 0.
+        def write(self,raw,cancel):
+            self.wrote=True
+            raise RuntimeError('Falha simulada ao escrever áudio no dispositivo')
+        def close(self):self.closed=True
+    monkeypatch.setattr(playback.tempfile,'TemporaryDirectory',CheckedDirectory)
+    session=PlaybackSession(movie,cut(0.,3.),RenderOptions(),[],audio_track=movie.audio[0]['index'],
+                            audio_factory=WriteErrorSink,max_size=80,fps=10)
+    session.start()
+    try:
+        deadline=time.monotonic()+5
+        while not session.finished and time.monotonic()<deadline:
+            session.read_frame();time.sleep(.005)
+        session.thread.join(timeout=1)
+        assert session.finished and not session.thread.is_alive()
+        assert outputs and outputs[0].wrote and outputs[0].closed
+        assert observations==[(True,True)]
+        assert 'escrever áudio' in session.error,'A limpeza mascarou a falha original de áudio.'
+        assert session.process.poll() is not None and session.process.stdout.closed
+    finally:session.stop()
