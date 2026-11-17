@@ -312,3 +312,45 @@ def test_audio_write_failure_stops_ffmpeg_before_temporary_cwd_cleanup(movie,mon
         assert 'escrever áudio' in session.error,'A limpeza mascarou a falha original de áudio.'
         assert session.process.poll() is not None and session.process.stdout.closed
     finally:session.stop()
+
+
+def test_native_pipe_cannot_expose_windows_crt_seek_to_pyav(movie,sinks,monkeypatch):
+    """Some Windows CRT pipes advertise seekability but reject actual seeks.
+
+    Check the real PyAV boundary and decode a short NUT stream through that
+    deceptive source; the pipe must remain strictly read-only/non-seekable.
+    """
+    import av
+    import errno
+    from radar import playback
+    launch=playback.start_process;open_container=av.open;pipes=[];interfaces=[]
+    class WindowsCrtPipe:
+        def __init__(self,pipe):self.pipe=pipe;self.seek_calls=0;self.tell_calls=0
+        def read(self,size=-1):return self.pipe.read(size)
+        def readable(self):return True
+        def seekable(self):return True  # Reproduce the native CRT misreport.
+        def seek(self,*args):
+            self.seek_calls+=1;raise OSError(errno.EINVAL,'Windows pipe cannot seek')
+        def tell(self):
+            self.tell_calls+=1;raise OSError(errno.EINVAL,'Windows pipe cannot tell')
+        @property
+        def closed(self):return self.pipe.closed
+        def close(self):self.pipe.close()
+    def start(*args,**options):
+        process=launch(*args,**options)
+        pipe=WindowsCrtPipe(process.stdout);process.stdout=pipe;pipes.append(pipe)
+        return process
+    def readonly_open(file,*args,**options):
+        interface=(file.readable(),file.seekable(),hasattr(file,'seek'),hasattr(file,'tell'))
+        interfaces.append(interface)
+        assert interface==(True,False,False,False),'PyAV recebeu operações de seek/tell de um pipe nativo.'
+        return open_container(file,*args,**options)
+    monkeypatch.setattr(playback,'start_process',start);monkeypatch.setattr(av,'open',readonly_open)
+    values,factory=sinks
+    session=PlaybackSession(movie,cut(.1,1.8),RenderOptions(),[],relative=.2,
+                            audio_track=movie.audio[0]['index'],audio_factory=factory,max_size=80,fps=10).start()
+    frames,_=collect(session,timeout=7)
+    assert frames and frames[0].time>=.2 and session.finished
+    assert interfaces==[(True,False,False,False)]
+    assert len(pipes)==1 and pipes[0].seek_calls==0 and pipes[0].tell_calls==0 and pipes[0].closed
+    assert values and values[0].closed
