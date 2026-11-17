@@ -12,6 +12,12 @@ A [Fase 2](docs/FASE2.md) mantém áudio externo com sincronização manual, exp
 
 A base da [Fase 1](docs/FASE1.md) permanece: motor local em CPU, sem chave/API obrigatória, checkpoints por etapa/lote, pausa/retomada, métricas reais e fila MP4 recuperável. Whisper e Gemini são opcionais. A [auditoria inicial](docs/AUDITORIA_2_0.md) registra a arquitetura anterior.
 
+## Player e formato no Estúdio de Legendas — desenvolvimento
+
+Na branch `feature/studio-player-layout`, o Estúdio de Legendas ganha reprodução contínua dentro da própria tela, com Reproduzir/Pausar/Retomar, cursor e seleção de uma faixa original ou **Sem áudio**, sem o limite de seis segundos. A aba **Vídeo e layout** reúne formatos original/horizontal/vertical, fundo desfocado e posição do recorte. Formato/resolução/qualidade são opções do projeto; X/Y são aplicados ao clipe selecionado. Salve o projeto depois de aplicar o enquadramento.
+
+Abra um clipe no **Estúdio de Legendas**, escolha a monitoração e clique **Reproduzir**; use **Vídeo e layout** para ajustar o formato junto das legendas. A prévia é leve (até 480 px/15 fps em CPU); o MP4 final usa a qualidade escolhida. Consulte o [manual do player e seus limites](docs/PLAYER_ESTUDIO.md). Esta evolução tem validação própria em andamento; os links de instalador estável abaixo não incluem automaticamente a mudança.
+
 ## Pré-edição 0.9 em desenvolvimento
 
 A branch `feature/radar-0.9-preeditor` acrescenta **Pré-edição** ao menu: análise conservadora por faixa OBS, revisão com aceitar/rejeitar/restaurar, IN/OUT, desfazer/refazer, projeto v3 e envio de uma única sequência editável ao FilmCraft. Sugestões não alteram a sequência até aprovação explícita; o original permanece intacto. Não exige MP4 intermediário, API, GPU ou dependência nova.

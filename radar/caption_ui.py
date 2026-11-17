@@ -25,10 +25,14 @@ def build(app,parent):
     app.caption_scale=ttk.Scale(seek,variable=app.caption_cursor,from_=0,to=1,command=app.caption_seek)
     app.caption_scale.grid(row=0,column=0,sticky='ew');ttk.Label(seek,textvariable=app.caption_time).grid(row=0,column=1,padx=(8,0))
     buttons=ttk.Frame(left);buttons.grid(row=2,column=0,sticky='ew')
-    for label,action in [('Atualizar prévia',app.caption_request_preview),('▶ Reproduzir 6 s',app.caption_play)]:
-        b=ttk.Button(buttons,text=label,command=action,style='Small.TButton');b.pack(side='left',padx=(0,6),pady=3);app._cut_buttons.append(b)
+    for column,(label,action) in enumerate([('Atualizar prévia',app.caption_request_preview),('Reproduzir',app.caption_play),('Parar',app.caption_stop_playback)]):
+        b=ttk.Button(buttons,text=label,command=action,style='Small.TButton');b.grid(row=0,column=column,sticky='w',padx=(0,4),pady=3);app._cut_buttons.append(b)
+        if label=='Reproduzir':b.configure(textvariable=app.caption_play_label);app.caption_play_button=b
     app.caption_active=tk.StringVar(value='Sem legenda neste instante')
     active=ttk.Label(left,textvariable=app.caption_active,style='Muted.TLabel',wraplength=350)
+    app.caption_monitor_picker=ttk.Combobox(buttons,textvariable=app.caption_monitor,state='readonly',width=15)
+    app.caption_monitor_picker.grid(row=1,column=0,columnspan=3,sticky='ew',pady=3);app.caption_monitor_picker.bind('<<ComboboxSelected>>',app.caption_monitor_changed)
+    app.caption_preview_canvas.bind('<space>',lambda e:app.caption_play());app.caption_preview_canvas.configure(takefocus=True)
     active.grid(row=3,column=0,sticky='ew',pady=4);active.bind('<Configure>',lambda e:active.configure(wraplength=max(200,e.width)))
     table=ttk.Frame(left);table.grid(row=4,column=0,sticky='nsew');table.columnconfigure(0,weight=1);table.rowconfigure(0,weight=1)
     app.caption_table=ttk.Treeview(table,columns=('start','end','text'),displaycolumns=('start','text'),show='headings',selectmode='browse',height=4,style='Caption.Treeview')
@@ -73,6 +77,9 @@ def build(app,parent):
     ttk.Label(pane,text='Presets personalizados').pack(anchor='w',pady=(10,4))
     app.caption_preset_picker=ttk.Combobox(pane,textvariable=app.caption_preset,values=list(app.caption_presets),state='readonly');app.caption_preset_picker.pack(fill='x');app.caption_preset_picker.bind('<<ComboboxSelected>>',app.caption_load_preset)
     ttk.Label(pane,text='Clique na prévia para posicionar a legenda do bloco. Aplique no clipe para mudar o padrão.',wraplength=260,style='Muted.TLabel').pack(fill='x',pady=8)
+    layout=ui.ScrollPage(right);right.add(layout,text='Vídeo e layout')
+    from .caption_layout import build_layout
+    build_layout(app,layout.content)
     pane=exports.content
     for label,var in [('Legendas ativadas neste clipe',app.caption_enabled),('Preservar qualidade do áudio',app.caption_audio)]:
         ttk.Checkbutton(pane,text=label,variable=var,command=app.caption_toggle).pack(anchor='w',pady=4)

@@ -42,6 +42,9 @@ class CaptionDesktop:
         self._caption_buffer=None;self._caption_style_buffer=None;self._caption_after=None
         self._caption_refreshing=False;self._caption_image=None;self._caption_preview_key=None
         self._caption_players=[]
+        self._caption_player=None;self._caption_poll_after=None
+        self.caption_play_label=tk.StringVar(value='Reproduzir');self.caption_monitor=tk.StringVar(value='')
+        self._caption_monitor_tracks={}
 
     def caption_cut(self):
         cut=next((c for c in self.cuts if c.id==self._caption_cut_id),None)
@@ -49,6 +52,7 @@ class CaptionDesktop:
         return cut
 
     def reset_captions(self):
+        self.caption_stop_playback();self.caption_monitor.set('')
         if self._caption_after is not None:self.after_cancel(self._caption_after);self._caption_after=None
         self._caption_cut_id=None;self._caption_cue_id=None;self._caption_buffer=None;self._caption_style_buffer=None
         self._caption_image=None;self._caption_preview_key=None
@@ -83,12 +87,19 @@ class CaptionDesktop:
             self.caption_refresh();return
         cut=next((c for c in self.cuts if c.id==ident),None)
         if cut is None:return
+        self.caption_stop_playback()
         self._caption_cut_id=ident;self._caption_cue_id=None;self._caption_buffer=None;self._caption_style_buffer=None
         self.caption_cursor.set(0.);self.caption_time.set(timestamp(0))
         self._caption_preview_key=None;self._caption_image=None;self.caption_preview_canvas.delete('all')
         if not self.table.exists(str(ident)):self.review_filter.set('Todos');self.refresh()
         self.table.selection_set(str(ident));self.show_detail()
         self.caption_refresh()
+        labels={f"Faixa {a['index']} - {a.get('title') or 'áudio original'}":a['index'] for a in self.media.audio}
+        self._caption_monitor_tracks={'Sem áudio':None,**labels}
+        self.caption_monitor_picker['values']=list(self._caption_monitor_tracks)
+        if self.caption_monitor.get() not in self._caption_monitor_tracks:self.caption_monitor.set(next(iter(labels),'Sem áudio'))
+        options=for_cut(self.rendering_for_export(),cut)
+        self.render_vars['crop_x'].set(str(options.crop_x));self.render_vars['crop_y'].set(str(options.crop_y))
         self.caption_status.set('Legendas editáveis carregadas.' if cut.captions else 'Clique em Gerar legendas para reutilizar a transcrição ou transcrever somente este Short.')
         self.caption_preview_canvas.create_text(12,12,anchor='nw',text='Mova o cursor ou clique em Atualizar prévia.',fill='#93a8c4',width=280)
 
@@ -275,6 +286,7 @@ class CaptionDesktop:
 
     def caption_seek(self,value):
         if self._caption_refreshing:return
+        self.caption_stop_playback()
         self.caption_cursor.set(float(value));self.caption_update_active()
         if self._caption_after is not None:self.after_cancel(self._caption_after)
         self._caption_after=self.after(350,self._caption_seek_preview)
@@ -297,6 +309,7 @@ class CaptionDesktop:
         self.caption_request_preview()
 
     def caption_request_preview(self):
+        self.caption_stop_playback()
         if self.busy or not self.media or self._caption_cut_id is None:return
         try:
             self.flush_captions();cut=Cut(**asdict(self.caption_cut()));media=self.media
@@ -310,7 +323,7 @@ class CaptionDesktop:
                 if self._caption_cut_id!=cut.id or abs(self.caption_cursor.get()-relative)>.001:return
                 self._caption_preview_key=key;self._caption_image=tk.PhotoImage(master=self,file=str(path));self.caption_draw_preview()
                 self.caption_update_active()
-                self.caption_status.set('Quadro sincronizado em '+timestamp(relative)+'. Reproduzir 6 s abre a animação com áudio no player.')
+                self.caption_status.set('Quadro sincronizado em '+timestamp(relative)+'. Reproduzir mostra o clipe inteiro aqui, com play/pause e áudio selecionado.')
                 self.notify('Prévia de legenda pronta. Edite o bloco ou exporte o resultado.')
                 stale=sorted(folder.glob('caption-*.png'),key=lambda p:p.stat().st_mtime,reverse=True)[32:]
                 for path in stale:path.unlink(missing_ok=True)
@@ -339,34 +352,86 @@ class CaptionDesktop:
             self.caption_style_vars['x'].set(f'{x:.3f}');self.caption_style_vars['y'].set(f'{y:.3f}')
             self.caption_apply_style(False)
 
+    def caption_stop_playback(self):
+        player=getattr(self,'_caption_player',None)
+        if player is not None:
+            self.caption_cursor.set(player.position)
+            player.stop();self._caption_player=None
+        if getattr(self,'_caption_poll_after',None) is not None:
+            self.after_cancel(self._caption_poll_after);self._caption_poll_after=None
+        if hasattr(self,'caption_play_label'):self.caption_play_label.set('Reproduzir')
+        if any(c.id==getattr(self,'_caption_cut_id',None) for c in self.cuts):self.caption_update_active()
+
     def caption_play(self):
         if self.busy:return
+        if self._caption_after is not None:self.after_cancel(self._caption_after);self._caption_after=None
         try:
-            self.flush_captions();cut=Cut(**asdict(self.caption_cut()));media=self.media
-            start=min(cut.start+self.caption_cursor.get(),cut.end-1/self.media.fps)
-            fragment=replace(cut,start=start,end=min(cut.end,start+6.))
-            options=self.rendering_for_export();options.preset='leve'
-            # Preview encodes a maximum of six seconds, never the full Short.
-            options.resolution=720
-            key=preview_key(media,fragment,options,0.);output=Path(self.preview_dir.name)/f'caption-play-{key}.mp4'
-            player=executable('ffplay')
-            def done(path):
-                self.preview_processes=[p for p in self.preview_processes if p.poll() is None]
-                for process,_ in self._caption_players:
-                    if process.poll() is None:process.terminate()
-                process=start_process([player,'-autoexit','-loglevel','error',str(path)])
-                self.preview_processes.append(process)
-                self._caption_players=[(p,f) for p,f in self._caption_players if p.poll() is None]+[(process,path)]
-                active={str(f) for p,f in self._caption_players if p.poll() is None}
-                files=sorted(Path(self.preview_dir.name).glob('caption-play-*.mp4'),key=lambda p:p.stat().st_mtime,reverse=True)
-                for old in files[4:]:
-                    if str(old) not in active:
-                        try:old.unlink(missing_ok=True)
-                        except OSError:pass
-                self.caption_status.set('Prévia de até 6 s aberta com áudio. A exportação final usa a qualidade selecionada.')
-            if output.is_file():done(output);return
-            self.work(lambda:export_clip(media,fragment,output,self.cancel,render_options=options,speech=self.speech,preview_size=640),done,message='Preparando até 6 s com animação e áudio…')
-        except (ValueError,TypeError,RuntimeError) as exc:self.error(exc)
+            player=self._caption_player
+            if player is not None and not player.finished:
+                if player.pause_event.is_set():
+                    player.resume();self.caption_play_label.set('Pausar');self.caption_status.set('Reproduzindo dentro do estúdio.')
+                else:
+                    try:player.pause()
+                    except Exception as exc:
+                        from .playback_audio import PauseUnavailable
+                        if not isinstance(exc,PauseUnavailable):raise
+                        self.caption_cursor.set(exc.position+player.relative);self.caption_stop_playback()
+                    self.caption_play_label.set('Retomar');self.caption_status.set('Pausado. Arraste o cursor ou retome a reprodução.')
+                return
+            self.caption_stop_playback();self.flush_captions()
+            from .playback import PlaybackSession
+            cut=self.caption_cut();position=self.caption_cursor.get()
+            if position>=cut.duration-1/self.media.fps:position=0.
+            track=self._caption_monitor_tracks.get(self.caption_monitor.get())
+            self._caption_player=PlaybackSession(self.media,cut,self.rendering_for_export(),deepcopy(self.speech),position,audio_track=track,threads=self.analysis_options.threads).start()
+            self.caption_play_label.set('Pausar')
+            self.caption_status.set('Preparando reprodução contínua em CPU (prévia leve, até 480 px/15 fps)…')
+            self._caption_poll_after=self.after(20,self._caption_poll_playback)
+        except (ValueError,TypeError,RuntimeError,OSError) as exc:
+            self.caption_stop_playback();self.error(exc)
+
+    def _caption_poll_playback(self):
+        self._caption_poll_after=None;player=self._caption_player
+        if player is None or self._closing:return
+        frame=player.read_frame()
+        if frame is not None:
+            self._caption_image=tk.PhotoImage(master=self,data=frame.ppm,format='PPM');self.caption_draw_preview()
+        self.caption_cursor.set(player.position);self.caption_update_active()
+        if player.finished:
+            error=player.error
+            self.caption_stop_playback()
+            if not error:self.caption_cursor.set(self.caption_cut().duration);self.caption_update_active()
+            self.caption_status.set('Reprodução concluída. O MP4 final usa a resolução/qualidade escolhidas.' if not error else 'Não foi possível reproduzir: '+error+' Se não houver dispositivo de som, escolha Sem áudio e tente novamente.')
+            return
+        if player.ready and not player.pause_event.is_set():self.caption_status.set('Reproduzindo no estúdio - prévia leve 15 fps; áudio sincronizado quando selecionado.')
+        self._caption_poll_after=self.after(20,self._caption_poll_playback)
+
+    def caption_monitor_changed(self,event=None):
+        playing=self._caption_player is not None and not self._caption_player.pause_event.is_set()
+        self.caption_stop_playback()
+        if playing:self.caption_play()
+
+    def caption_layout_preset(self,mode):
+        if self.busy:return
+        from .render import MODES
+        self.render_mode_label.set(MODES[mode]);self.caption_layout_preview()
+
+    def caption_layout_preview(self):
+        if self.busy:return
+        try:
+            self.rendering_from_ui();self.studio_changed();self.caption_request_preview()
+        except ValueError as exc:self.error(exc)
+
+    def caption_apply_layout(self):
+        if self.busy:return
+        try:
+            self.flush_captions();cut=self.caption_cut();options=self.rendering_from_ui()
+            cut.framing={'crop_x':options.crop_x,'crop_y':options.crop_y}
+            self.studio_changed();self.caption_request_preview()
+        except (ValueError,TypeError) as exc:self.error(exc)
+
+    def caption_reset_layout(self):
+        self.render_vars['crop_x'].set('0.5');self.render_vars['crop_y'].set('0.5');self.caption_apply_layout()
 
     def caption_color(self,key):
         value=colorchooser.askcolor(color=self.caption_style_vars[key].get(),title='Cor da legenda')[1]

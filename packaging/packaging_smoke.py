@@ -88,6 +88,7 @@ def smoke():
         caption_result=caption_roundtrip(media,tmp/'captions')
         workspace_result=workspace_roundtrip(media,tmp/'workspace')
         preedit_result=preedit_roundtrip(media,tmp/'preedit')
+        player_result=player_roundtrip(tmp/'player')
         import gc
         gc.collect()
         gemini_result=gemini_offline_smoke(tmp)
@@ -95,7 +96,7 @@ def smoke():
             'silence_vad': True, 'portuguese_transcript': text, 'otio': True,
             'portable_export':True, 'transcript_txt':True,'checkpoint_resume':True,'local_cpu_without_api':True,
             'external_audio_sync':True,'speech_context':True,
-            'preedit':preedit_result,'studio':studio_result,'captions':caption_result,'workspace':workspace_result,'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
+            'player':player_result,'preedit':preedit_result,'studio':studio_result,'captions':caption_result,'workspace':workspace_result,'filmcraft':filmcraft_result, 'gemini_contract':gemini_result, 'gemini_live_api':False}
 
 
 def workspace_roundtrip(media,folder):
@@ -395,3 +396,81 @@ def preedit_roundtrip(media,folder):
         native=True
     return {'explicit_decisions':True,'undo_redo':True,'project_v3':True,'otio_sequence':True,
             'native_reopened':native,'audio_measurements':bool(measured.audio_analysis)}
+
+
+def player_roundtrip(folder):
+    """Exercise continuous Tk playback and layout in the frozen desktop.
+
+    Monitoring is explicitly set to Sem áudio: CI hosts may have no physical
+    output device. Native backend clock/lifecycle tests are separate.
+    """
+    import gc
+    import time
+    import av
+    from radar.captions import generate_track
+    from radar.gui import App
+    from radar.media import executable,probe,run
+    from radar.model import Cut
+    from radar.projects import load_project
+    folder=Path(folder).resolve();folder.mkdir()
+    original=folder/'player-original.mp4'
+    run([executable('ffmpeg'),'-v','error','-f','lavfi','-i',
+         "color=red:s=160x90:r=25:d=8,drawbox=x=0:y=0:w=iw:h=ih:color=blue:t=fill:enable='gte(t,7)'",
+         '-f','lavfi','-i','sine=frequency=880:duration=8','-c:v','libx264','-preset','ultrafast','-c:a','aac',original])
+    media=probe(original);cut=Cut(1,0.,8.,0,'Player contínuo','Teste funcional de oito segundos',manual=True)
+    speech=[{'start':1.,'end':2.,'text':'CEFAS PLAYER','words':[]}]
+    cut.captions=generate_track(cut,speech)
+    profile=folder/'profile';profile.mkdir();previous=Path.cwd();app=None;errors=[]
+    gc.collect()
+    try:
+        os.chdir(profile);app=App();app.error=lambda exc:errors.append(str(exc))
+        app.loaded(media);app.cuts=[cut];app.speech=speech;app.refresh();app.show_page('captions');app.update()
+        def pump_until(condition,timeout=20):
+            deadline=time.monotonic()+timeout
+            while not condition() and time.monotonic()<deadline:
+                app.update();time.sleep(.01)
+            app.update()
+            assert not errors,errors
+            assert condition(),f'Player/layout não terminou: {app.caption_status.get()}'
+        app.caption_layout_preset('vertical_blur')
+        pump_until(lambda:not app.busy)
+        assert app.rendering_for_export().mode=='vertical_blur'
+        assert app._caption_image is not None and app._caption_image.height()>app._caption_image.width()
+        app.caption_monitor.set('Sem áudio');app.caption_monitor_changed()
+        assert app._caption_monitor_tracks[app.caption_monitor.get()] is None
+        app.caption_play();first=app._caption_player
+        assert first is not None and first.audio_track is None
+        pump_until(lambda:app.caption_cursor.get()>=6.3,timeout=25)
+        assert first.error is None and first.decoded_frames>80
+        assert app._caption_image is not None and app.caption_preview_canvas.find_all()
+        app.caption_play();paused=app.caption_cursor.get()
+        assert first.pause_event.is_set()
+        until=time.monotonic()+.2
+        while time.monotonic()<until:app.update();time.sleep(.01)
+        assert abs(app.caption_cursor.get()-paused)<.04,'O cursor avançou durante pausa.'
+        app.caption_play();assert not first.pause_event.is_set()
+        pump_until(lambda:app.caption_cursor.get()>paused+.15)
+        app.caption_seek(7.)
+        pump_until(lambda:app._caption_after is None and not app.busy)
+        assert not first.thread.is_alive() and abs(app.caption_cursor.get()-7.)<.04
+        app.caption_play();second=app._caption_player
+        assert second is not None and second.relative>=6.95
+        pump_until(lambda:app._caption_player is None,timeout=10)
+        assert second.error is None and second.finished and second.process.poll() is not None
+        assert app.caption_cursor.get()==cut.duration and app._caption_image is not None
+        assert not list(Path(app.preview_dir.name).glob('caption-play*.mp4')),'A prévia recriou MP4 intermediário.'
+        project=folder/'player.radar.json'
+        with patch('radar.desktop_studio.filedialog.asksaveasfilename',return_value=str(project)):
+            app.save_studio_project();pump_until(lambda:not app.busy)
+        loaded=load_project(project)
+        assert loaded['render'].mode=='vertical_blur' and loaded['cuts'][0].captions==cut.captions
+        app.open_studio_project(str(project));pump_until(lambda:not app.busy)
+        assert app.rendering_for_export().mode=='vertical_blur'
+    finally:
+        if app is not None:app.close()
+        os.chdir(previous)
+        gc.collect()
+    return {'embedded_tk_canvas':True,'continuous_past_six_seconds':True,'pause_resume':True,
+            'seek_to_seven_seconds':True,'reaches_clip_end':True,'no_preview_mp4':True,
+            'vertical_blur_preview':True,'layout_project_roundtrip':True,
+            'monitor':'Sem áudio (seleção explícita no smoke sem dispositivo físico)'}
